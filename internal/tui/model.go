@@ -41,7 +41,6 @@ const (
 	stateCreate
 	stateServerSelect
 	stateLinkSelect
-	stateRepoFilter
 )
 
 type (
@@ -151,7 +150,6 @@ type Model struct {
 	repos       []*gh.RepoInfo
 	repoCursor  int
 	repoOffset  int
-	repoQuery   string
 	repoInput   textinput.Model
 
 	detailPR     *gh.PullInfo
@@ -203,7 +201,8 @@ func New(cfg *config.Config, serverIdx int, client *gh.Client, repo *gh.RepoInfo
 	body.ShowLineNumbers = false
 
 	filter := textinput.New()
-	filter.Placeholder = "Filter repositories"
+	filter.Placeholder = "Search repositories"
+	filter.Prompt = ""
 	filter.CharLimit = 128
 
 	m := Model{
@@ -257,16 +256,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m.handleKey(msg)
 	case bootMsg:
-		cmds := []tea.Cmd{m.cmdWhoAmI()}
+		cmds := []tea.Cmd{m.cmdWhoAmI(), m.cmdRepos()}
 		if m.repo != nil {
 			cmds = append(cmds, m.reloadCurrent())
 			if m.openKind != "" && m.openNumber > 0 {
 				cmds = append(cmds, m.cmdOpenInitial())
 			}
-		} else {
-			cmds = append(cmds, m.cmdRepos())
 		}
-		return m.track(cmds...)
+		nm, cmd := m.track(cmds...)
+		if nm.tab == tabRepos {
+			return nm, tea.Batch(cmd, nm.repoInput.Focus())
+		}
+		return nm, cmd
 	case whoAmIMsg:
 		m = m.finish()
 		m.username = msg.name
@@ -372,8 +373,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = stateMain
 		m.repoPage = 1
 		m.repoCursor = 0
+		m.repoInput.SetValue("")
 		nm, cmd := m.track(m.cmdWhoAmI(), m.cmdRepos())
-		return nm, cmd
+		return nm, tea.Batch(cmd, nm.repoInput.Focus())
 	case errMsg:
 		m = m.finish()
 		if msg.err != nil {
@@ -401,11 +403,20 @@ func commentNote(truncated bool, commentErr string) string {
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	if m.loading && m.state != stateComment && m.state != stateCreate && m.state != stateRepoFilter {
+	onRepoSearch := m.state == stateMain && m.tab == tabRepos
+	if m.loading && m.state != stateComment && m.state != stateCreate && !onRepoSearch {
 		if msg.String() == "q" {
 			return m, tea.Quit
 		}
 		return m, nil
+	}
+	if onRepoSearch {
+		var focus tea.Cmd
+		if !m.repoInput.Focused() {
+			focus = m.repoInput.Focus()
+		}
+		nm, cmd := m.handleRepoSearch(msg)
+		return nm, tea.Batch(focus, cmd)
 	}
 	switch m.state {
 	case stateConfirm:
@@ -418,8 +429,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleComment(msg)
 	case stateCreate:
 		return m.handleCreate(msg)
-	case stateRepoFilter:
-		return m.handleRepoFilter(msg)
 	case stateJobLog:
 		return m.handleLog(msg.String())
 	case stateDetail:
@@ -434,19 +443,15 @@ func (m Model) handleMain(key string) (tea.Model, tea.Cmd) {
 	case "q":
 		return m, tea.Quit
 	case "tab", "right":
+		m.blurRepoSearch()
 		m.tab = (m.tab + 1) % tabCount
 		m.clampList()
-		if m.needsLoad() {
-			return m.track(m.reloadCurrent())
-		}
-		return m, nil
+		return m.afterTabChange()
 	case "shift+tab", "left":
+		m.blurRepoSearch()
 		m.tab = (m.tab + tabCount - 1) % tabCount
 		m.clampList()
-		if m.needsLoad() {
-			return m.track(m.reloadCurrent())
-		}
-		return m, nil
+		return m.afterTabChange()
 	case "1":
 		return m.jumpTab(tabPRs)
 	case "2":
@@ -500,22 +505,126 @@ func (m Model) handleMain(key string) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "/":
 		if m.tab == tabRepos {
-			m.state = stateRepoFilter
-			m.repoInput.SetValue(m.repoQuery)
 			return m, m.repoInput.Focus()
 		}
 	}
 	return m, nil
 }
 
+func (m *Model) blurRepoSearch() {
+	m.repoInput.Blur()
+}
+
+func (m Model) afterTabChange() (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	if m.tab == tabRepos {
+		cmds = append(cmds, m.repoInput.Focus())
+	}
+	if m.needsLoad() {
+		nm, cmd := m.track(m.reloadCurrent())
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if len(cmds) == 0 {
+			return nm, nil
+		}
+		return nm, tea.Batch(cmds...)
+	}
+	if len(cmds) == 0 {
+		return m, nil
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleRepoSearch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "tab":
+		m.blurRepoSearch()
+		m.tab = (m.tab + 1) % tabCount
+		m.clampList()
+		return m.afterTabChange()
+	case "shift+tab":
+		m.blurRepoSearch()
+		m.tab = (m.tab + tabCount - 1) % tabCount
+		m.clampList()
+		return m.afterTabChange()
+	case "up":
+		m.move(-1)
+		return m, nil
+	case "down":
+		m.move(1)
+		return m, nil
+	case "pgdown":
+		return m.nextPage()
+	case "pgup":
+		return m.prevPage()
+	case "ctrl+r":
+		return m.track(m.cmdRepos())
+	case "enter":
+		return m.useSelectedRepo()
+	case "esc":
+		if strings.TrimSpace(m.repoInput.Value()) == "" {
+			return m, nil
+		}
+		m.repoInput.SetValue("")
+		m.repoCursor = 0
+		m.repoOffset = 0
+		m.clampList()
+		return m, nil
+	default:
+		prev := m.repoInput.Value()
+		var cmd tea.Cmd
+		m.repoInput, cmd = m.repoInput.Update(msg)
+		if m.repoInput.Value() != prev {
+			m.repoCursor = 0
+			m.repoOffset = 0
+			m.clampList()
+		}
+		return m, cmd
+	}
+}
+
+func (m Model) useSelectedRepo() (tea.Model, tea.Cmd) {
+	repo := m.selectedRepo()
+	if repo == nil {
+		return m, nil
+	}
+	m.repo = repo
+	m.repoInput.Blur()
+	m.prs, m.issues, m.runs = nil, nil, nil
+	m.prPage, m.issuePage, m.runPage = 1, 1, 1
+	m.tab = tabPRs
+	m.state = stateMain
+	return m.track(m.cmdPulls())
+}
+
 func (m Model) jumpTab(tab tabID) (tea.Model, tea.Cmd) {
+	if m.tab == tabRepos && tab != tabRepos {
+		m.blurRepoSearch()
+	}
 	m.tab = tab
 	m.state = stateMain
 	m.clampList()
-	if m.needsLoad() {
-		return m.track(m.reloadCurrent())
+	var cmds []tea.Cmd
+	if tab == tabRepos {
+		cmds = append(cmds, m.repoInput.Focus())
 	}
-	return m, nil
+	if m.needsLoad() {
+		nm, cmd := m.track(m.reloadCurrent())
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if len(cmds) == 0 {
+			return nm, nil
+		}
+		return nm, tea.Batch(cmds...)
+	}
+	if len(cmds) == 0 {
+		return m, nil
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
@@ -737,34 +846,6 @@ func (m Model) handleCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) handleRepoFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	switch msg.String() {
-	case "esc":
-		m.repoQuery = ""
-		m.repoInput.SetValue("")
-		m.repoInput.Blur()
-		m.state = stateMain
-		m.repoCursor = 0
-		m.repoOffset = 0
-		return m, nil
-	case "enter":
-		m.repoQuery = strings.TrimSpace(m.repoInput.Value())
-		m.repoInput.Blur()
-		m.state = stateMain
-		m.repoCursor = 0
-		m.repoOffset = 0
-		m.clampList()
-		return m, nil
-	default:
-		var cmd tea.Cmd
-		m.repoInput, cmd = m.repoInput.Update(msg)
-		m.repoQuery = m.repoInput.Value()
-		m.repoCursor = 0
-		m.repoOffset = 0
-		return m, cmd
-	}
-}
-
 func (m Model) formFieldCount() int {
 	if m.formKind == "pr" {
 		return 4
@@ -814,10 +895,14 @@ func (m Model) layoutInputs() {
 	if w > 88 {
 		w = 88
 	}
+	repoW := m.width - 6
+	if repoW < 20 {
+		repoW = 20
+	}
 	m.titleInput.Width = w
 	m.headInput.Width = w
 	m.baseInput.Width = w
-	m.repoInput.Width = w
+	m.repoInput.Width = repoW
 	m.bodyInput.SetWidth(w)
 	h := m.height / 4
 	if h < 5 {
@@ -874,7 +959,7 @@ func (m Model) repoFull() string {
 
 func (m Model) needsLoad() bool {
 	if m.tab == tabRepos {
-		return m.repos == nil
+		return m.repos == nil || (len(m.repos) == 0 && strings.TrimSpace(m.repoInput.Value()) == "")
 	}
 	if m.repo == nil {
 		return false
@@ -994,12 +1079,15 @@ func (m *Model) clampList() {
 }
 
 func (m Model) visibleRepos() []*gh.RepoInfo {
-	q := strings.ToLower(strings.TrimSpace(m.repoQuery))
+	q := strings.ToLower(strings.TrimSpace(m.repoInput.Value()))
 	if q == "" {
 		return m.repos
 	}
 	var out []*gh.RepoInfo
 	for _, repo := range m.repos {
+		if repo == nil {
+			continue
+		}
 		if strings.Contains(strings.ToLower(repo.FullName), q) || strings.Contains(strings.ToLower(repo.Description), q) {
 			out = append(out, repo)
 		}
@@ -1137,6 +1225,7 @@ func (m Model) openSelected() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.repo = repo
+		m.repoInput.Blur()
 		m.prs, m.issues, m.runs = nil, nil, nil
 		m.prPage, m.issuePage, m.runPage = 1, 1, 1
 		m.tab = tabPRs

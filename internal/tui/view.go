@@ -71,8 +71,6 @@ func (m Model) hints() string {
 		return joinHints([][2]string{{"ctrl+s", "post"}, {"esc", "cancel"}})
 	case stateCreate:
 		return joinHints([][2]string{{"tab", "next field"}, {"ctrl+s", "save"}, {"esc", "cancel"}})
-	case stateRepoFilter:
-		return joinHints([][2]string{{"enter", "apply"}, {"esc", "clear"}})
 	case stateJobLog:
 		return joinHints([][2]string{{"j/k", "scroll"}, {"g/G", "top/bottom"}, {"esc", "back"}})
 	case stateDetail:
@@ -99,7 +97,10 @@ func (m Model) hints() string {
 		case tabActions:
 			h = append([][2]string{{"R", "rerun"}, {"c", "cancel"}}, h...)
 		case tabRepos:
-			h = append([][2]string{{"/", "filter"}, {"enter", "use repo"}}, h...)
+			return joinHints([][2]string{
+				{"type", "search"}, {"up/down", "move"}, {"enter", "use repo"},
+				{"esc", "clear"}, {"pgup/pgdn", "page"}, {"tab", "tabs"}, {"ctrl+c", "quit"},
+			})
 		}
 		return joinHints(h)
 	}
@@ -125,8 +126,6 @@ func (m Model) viewBody() string {
 		return m.placeDialog(subtitleStyle.Render("Comment"), "ctrl+s posts the comment", m.bodyInput.View())
 	case stateCreate:
 		return m.viewCreate()
-	case stateRepoFilter:
-		return m.viewList()
 	case stateJobLog:
 		return m.viewLog()
 	case stateDetail:
@@ -136,6 +135,20 @@ func (m Model) viewBody() string {
 		return m.viewTextDetail()
 	default:
 		return m.viewList()
+	}
+}
+
+func (m Model) viewBodyForState(st appState) string {
+	switch st {
+	case stateDetail:
+		if m.detailRun != nil {
+			return m.viewRun()
+		}
+		return m.viewTextDetail()
+	case stateJobLog:
+		return m.viewLog()
+	default:
+		return m.viewListCore()
 	}
 }
 
@@ -196,22 +209,6 @@ func (m Model) padBodyHeight(content string) string {
 		lines = lines[:height]
 	}
 	return strings.Join(lines, "\n")
-}
-
-func (m Model) viewBodyForState(st appState) string {
-	switch st {
-	case stateDetail:
-		if m.detailRun != nil {
-			return m.viewRun()
-		}
-		return m.viewTextDetail()
-	case stateJobLog:
-		return m.viewLog()
-	case stateRepoFilter:
-		return m.viewListCore()
-	default:
-		return m.viewListCore()
-	}
 }
 
 func (m Model) viewCreate() string {
@@ -288,6 +285,11 @@ func (m Model) viewList() string {
 	return m.viewListCore()
 }
 
+const (
+	repoVisColW  = 9
+	repoNameColW = 42
+)
+
 func (m Model) viewListCore() string {
 	title := m.listTitle()
 	rows := m.listRows()
@@ -300,12 +302,11 @@ func (m Model) viewListCore() string {
 	var b strings.Builder
 	b.WriteString(subtitleStyle.Render(title))
 	b.WriteString("\n")
-	if m.tab == tabRepos && (m.state == stateRepoFilter || m.repoQuery != "") {
-		if m.state == stateRepoFilter {
-			b.WriteString(m.repoInput.View())
-		} else {
-			b.WriteString(dimStyle.Render("filter: " + m.repoQuery))
-		}
+	if m.tab == tabRepos {
+		b.WriteString("  ")
+		b.WriteString(m.repoInput.View())
+		b.WriteString("\n\n")
+		b.WriteString(m.repoListHeader(max(20, m.width-2)))
 		b.WriteString("\n")
 	}
 	if len(rows) == 0 {
@@ -322,6 +323,14 @@ func (m Model) viewListCore() string {
 		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func (m Model) repoListHeader(width int) string {
+	header := lipgloss.NewStyle().Foreground(colorMuted).PaddingLeft(2).Render(
+		fmt.Sprintf("%-*s  %-*s  %s", repoVisColW, "Vis", repoNameColW, "Repository", "Description"),
+	)
+	rule := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", width))
+	return header + "\n" + rule
 }
 
 func (m Model) listTitle() string {
@@ -350,7 +359,7 @@ func (m Model) emptyList() string {
 	case tabActions:
 		return "No workflow runs."
 	default:
-		if m.repoQuery != "" {
+		if strings.TrimSpace(m.repoInput.Value()) != "" {
 			return "No repositories match."
 		}
 		return "No repositories."
@@ -382,18 +391,28 @@ func (m Model) listRows() []string {
 		repos := m.visibleRepos()
 		rows := make([]string, len(repos))
 		for i, repo := range repos {
-			badge := "public"
-			if repo.Private {
-				badge = "private"
-			}
-			rest := repo.FullName
-			if repo.Description != "" {
-				rest += "  " + repo.Description
-			}
-			rows[i] = m.renderItem(statusBadge(badge), rest, i == m.repoCursor, width)
+			rows[i] = m.renderRepoRow(repo, i == m.repoCursor, width)
 		}
 		return rows
 	}
+}
+
+func (m Model) renderRepoRow(repo *gh.RepoInfo, selected bool, width int) string {
+	vis := padColumn(repoVisibilityLabel(repo.Private), repoVisColW)
+	name := padColumn(fit(repo.FullName, repoNameColW), repoNameColW)
+	descW := width - 2 - repoVisColW - 2 - repoNameColW - 2
+	if descW < 8 {
+		descW = 8
+	}
+	desc := dimStyle.Render(fit(repo.Description, descW))
+	line := vis + "  " + name + "  " + desc
+	st := normalItemStyle
+	mark := "  "
+	if selected {
+		st = selectedStyle
+		mark = "▶ "
+	}
+	return st.Width(width - 2).Render(mark + line)
 }
 
 func (m Model) renderItem(badge, rest string, selected bool, width int) string {
@@ -568,8 +587,8 @@ func (m Model) bodyHeight() int {
 
 func (m Model) listHeight() int {
 	h := m.bodyHeight() - 2
-	if m.tab == tabRepos && (m.repoQuery != "" || m.state == stateRepoFilter) {
-		h--
+	if m.tab == tabRepos {
+		h -= 4 // search, blank line, header, rule
 	}
 	if h < 3 {
 		return 3

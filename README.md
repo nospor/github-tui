@@ -9,7 +9,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 - **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, open, merge, close, reopen, and create
 - **Issues** — list, filter, read, comment, create, close, and reopen
 - **Actions** — list workflow runs, inspect jobs, read job logs, re-run, and cancel
-- **Repositories** — browse repos the token can access, filter the page, and switch the working repo
+- **Repositories** — browse repos the token can access, search the list as you type, and switch the working repo
 - **Servers** — github.com and GitHub Enterprise, selected from config
 - **Auto-detect** — picks the server and `owner/repo` from the current directory's git remote
 - **Open and yank** — `o` opens the GitHub page in a browser, `y` copies the URL
@@ -88,7 +88,7 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 | `C` | Comment on the open pull request or issue |
 | `r` | Refresh |
 | `n` / `p` | Next / previous page |
-| `/` | Filter the repository list |
+| Repos tab | Type to search (letters including j/k), `↑`/`↓` to move, `Enter` to use the repo and open Pull requests, `Esc` to clear, `PgUp`/`PgDn` to page |
 | `o` | Open in the browser |
 | `y` | Copy the URL |
 | `S` | Switch server |

@@ -140,6 +140,21 @@ func padStatusBadge(badge string, width int) string {
 	return badge + strings.Repeat(" ", width-w)
 }
 
+func repoVisibilityLabel(private bool) string {
+	if private {
+		return warningStyle.Render("private")
+	}
+	return successStyle.Render("public")
+}
+
+func padColumn(s string, width int) string {
+	w := lipgloss.Width(s)
+	if w >= width {
+		return s
+	}
+	return s + strings.Repeat(" ", width-w)
+}
+
 func tabStyle(label string, active bool) string {
 	if active {
 		return lipgloss.NewStyle().Foreground(colorAccentAlt).Bold(true).Underline(true).Padding(0, 2).Render(label)
