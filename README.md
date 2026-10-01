@@ -6,17 +6,17 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 
 ## Features
 
-- **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, open, merge, close, reopen, create, and inspect the file diff (`Tab`)
-- **Branches** — list, delete, open a branch to browse commits with diff pane (`Tab`), compare two branches (`C`), create a pull request from a branch (`c`)
-- **Tags** — list, create (name, ref branch, message), edit GitHub release notes (`e` in tag detail), delete, browse commits with diff pane
-- **Issues** — list, filter, read, comment, create, close, reopen, and create a git branch for an issue (`b`)
-- **Actions** — list workflow runs, inspect jobs, read job logs, re-run, and cancel
-- **Repositories** — browse repos the token can access, search the list as you type, and switch the working repo
-- **Servers** — github.com and GitHub Enterprise, selected from config
-- **Auto-detect** — picks the server and `owner/repo` from the current directory's git remote
-- **Open and yank** — `o` opens the GitHub page in a browser, `y` copies the URL
-- **YouTrack** — optional issue-key links (`PROJ-123`) in descriptions and comments
-- **Themes** — `catppuccin` (default) and `teams`
+- 🔀 **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, open, merge, close, reopen, create, and inspect the file diff (`Tab`)
+- 🌿 **Branches** — list, delete, open a branch to browse commits with diff pane (`Tab`), compare two branches (`C`), create a pull request from a branch (`c`)
+- 🏷️ **Tags** — list, create (name, ref branch, message), edit GitHub release notes (`e` in tag detail), delete, browse commits with diff pane
+- 🐛 **Issues** — list, filter, read, comment, create, close, reopen, and create a git branch for an issue (`b`)
+- 🚀 **Actions** — list workflow runs, inspect jobs, read job logs, re-run, and cancel
+- 📁 **Repositories** — browse repos the token can access, search the list as you type, and switch the working repo
+- 🔌 **Servers** — github.com and GitHub Enterprise, selected from config
+- 🧠 **Auto-detect** — picks the server and `owner/repo` from the current directory's git remote
+- 🔗 **Open and yank** — `o` opens the GitHub page in a browser, `y` copies the URL
+- 🎫 **YouTrack** — optional issue-key links (`PROJ-123`) in descriptions and comments
+- 🎨 **Themes** — `catppuccin` (default) and `teams`
 
 There is no container registry tab. GitHub fine-grained tokens also cannot call the Packages API.
 
@@ -101,11 +101,9 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 
 Create forms use `Tab` to move between fields and `Ctrl+S` to save. In a pull request, **Head** is the branch name, or `user:branch` when the branch is on a fork. **Base** starts as the repository's default branch.
 
-## Project layout
+## License
 
-```
-cmd/github-tui/main.go
-internal/config/     config file, git remote detection, URL parsing
-internal/github/     GitHub REST client
-internal/tui/        Bubble Tea model and views
-```
+See [LICENSE](LICENSE).
+
+## Thanks For Visiting
+Hope you liked it. Wanna **[buy Me a coffee](https://www.buymeacoffee.com/nospor)**?
