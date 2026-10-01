@@ -16,7 +16,7 @@ func (m Model) View() string {
 	}
 	body := m.viewBody()
 	screen := lipgloss.JoinVertical(lipgloss.Left, m.viewTitle(), m.viewTabs(), body, m.viewFooter(), m.viewStatus())
-	return baseStyle.Width(m.width).Height(m.height).Render(screen)
+	return lipgloss.NewStyle().Width(m.width).Render(screen)
 }
 
 func (m Model) viewTitle() string {
@@ -148,15 +148,70 @@ func (m Model) placeDialog(title, note, body string) string {
 		w = 24
 	}
 	var b strings.Builder
-	b.WriteString(title)
-	b.WriteString("\n\n")
+	if title != "" {
+		b.WriteString(title)
+		b.WriteString("\n\n")
+	}
 	if note != "" {
 		b.WriteString(dimStyle.Render(note))
 		b.WriteString("\n\n")
 	}
 	b.WriteString(body)
 	box := dialogStyle.Width(w).Render(b.String())
-	return lipgloss.Place(m.width, m.bodyHeight(), lipgloss.Center, lipgloss.Center, box)
+
+	bg := m.dialogBackground()
+	height := m.bodyHeight()
+	dlgWidth := lipgloss.Width(box)
+	dlgHeight := lipgloss.Height(box)
+	startX := (m.width - dlgWidth) / 2
+	startY := (height - dlgHeight) / 2
+	if startY < 0 {
+		startY = 0
+	}
+	return overlay(bg, box, m.width, height, startX, startY)
+}
+
+func (m Model) dialogBackground() string {
+	bg := ""
+	switch m.state {
+	case stateConfirm, stateComment, stateCreate, stateServerSelect, stateLinkSelect:
+		bg = m.viewBodyForState(m.returnState)
+	}
+	return m.padBodyHeight(bg)
+}
+
+func (m Model) padBodyHeight(content string) string {
+	height := m.bodyHeight()
+	if height < 1 {
+		height = 1
+	}
+	lines := strings.Split(content, "\n")
+	if content == "" {
+		lines = nil
+	}
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m Model) viewBodyForState(st appState) string {
+	switch st {
+	case stateDetail:
+		if m.detailRun != nil {
+			return m.viewRun()
+		}
+		return m.viewTextDetail()
+	case stateJobLog:
+		return m.viewLog()
+	case stateRepoFilter:
+		return m.viewListCore()
+	default:
+		return m.viewListCore()
+	}
 }
 
 func (m Model) viewCreate() string {
@@ -230,6 +285,10 @@ func (m Model) viewList() string {
 	if m.tab != tabRepos && m.repo == nil {
 		return m.placeDialog(subtitleStyle.Render("No repository"), "Open the Repos tab and press enter, or run github-tui inside a GitHub clone.", "")
 	}
+	return m.viewListCore()
+}
+
+func (m Model) viewListCore() string {
 	title := m.listTitle()
 	rows := m.listRows()
 	height := m.listHeight()

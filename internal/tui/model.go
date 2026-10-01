@@ -682,7 +682,7 @@ func (m Model) handleLinks(key string) (tea.Model, tea.Cmd) {
 func (m Model) handleComment(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "esc":
-		m.state = stateDetail
+		m.state = m.returnState
 		m.bodyInput.Blur()
 		return m, nil
 	case "ctrl+s":
@@ -691,7 +691,7 @@ func (m Model) handleComment(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.setStatus("Comment is empty")
 			return m, m.scheduleClear()
 		}
-		m.state = stateDetail
+		m.state = m.returnState
 		m.bodyInput.Blur()
 		return m.track(m.cmdComment(body))
 	default:
@@ -706,7 +706,7 @@ func (m Model) handleCreate(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	n := m.formFieldCount()
 	switch key {
 	case "esc":
-		m.state = stateMain
+		m.state = m.returnState
 		m.blurForm()
 		return m, nil
 	case "tab":
@@ -1168,6 +1168,7 @@ func (m Model) startCreateIssue() (tea.Model, tea.Cmd) {
 	m.formFocus = 0
 	m.titleInput.SetValue("")
 	m.bodyInput.SetValue("")
+	m.returnState = m.state
 	m.state = stateCreate
 	m.layoutInputs()
 	return m.focusCurrent()
@@ -1184,6 +1185,7 @@ func (m Model) startCreatePR() (tea.Model, tea.Cmd) {
 	m.baseInput.SetValue(m.repo.DefaultBranch)
 	m.titleInput.SetValue("")
 	m.bodyInput.SetValue("")
+	m.returnState = m.state
 	m.state = stateCreate
 	m.layoutInputs()
 	return m.focusCurrent()
@@ -1191,6 +1193,7 @@ func (m Model) startCreatePR() (tea.Model, tea.Cmd) {
 
 func (m Model) startComment() (tea.Model, tea.Cmd) {
 	m.bodyInput.SetValue("")
+	m.returnState = m.state
 	m.state = stateComment
 	m.layoutInputs()
 	return m, m.bodyInput.Focus()
@@ -1206,7 +1209,7 @@ func (m Model) submitCreate() (tea.Model, tea.Cmd) {
 			m.setStatus("Head, base, and title are required")
 			return m, m.scheduleClear()
 		}
-		m.state = stateMain
+		m.state = m.returnState
 		m.blurForm()
 		return m.track(m.cmdCreatePull(head, base, title, body))
 	}
@@ -1214,7 +1217,7 @@ func (m Model) submitCreate() (tea.Model, tea.Cmd) {
 		m.setStatus("Title is required")
 		return m, m.scheduleClear()
 	}
-	m.state = stateMain
+	m.state = m.returnState
 	m.blurForm()
 	return m.track(m.cmdCreateIssue(title, body))
 }

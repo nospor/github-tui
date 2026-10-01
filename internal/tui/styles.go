@@ -7,7 +7,6 @@ import (
 )
 
 var (
-	colorBg        = lipgloss.Color("#0d1117")
 	colorBgPanel   = lipgloss.Color("#161b22")
 	colorBgHover   = lipgloss.Color("#1f2937")
 	colorBorder    = lipgloss.Color("#30363d")
@@ -22,11 +21,11 @@ var (
 	colorTextDim   = lipgloss.Color("#94a3b8")
 	colorGold      = lipgloss.Color("#f59e0b")
 	colorTeal      = lipgloss.Color("#14b8a6")
-	colorTitleFg   = lipgloss.Color("#ffffff")
+	colorTitleFg     = lipgloss.Color("#ffffff")
+	colorBgPanelANSI = "\x1b[48;2;22;27;34m"
 )
 
 var (
-	baseStyle       lipgloss.Style
 	titleBarStyle   lipgloss.Style
 	subtitleStyle   lipgloss.Style
 	mutedStyle      lipgloss.Style
@@ -50,7 +49,6 @@ func init() {
 func InitTheme(themeName string) {
 	switch strings.ToLower(strings.TrimSpace(themeName)) {
 	case "teams":
-		colorBg = lipgloss.Color("#202020")
 		colorBgPanel = lipgloss.Color("#303030")
 		colorBgHover = lipgloss.Color("#404040")
 		colorBorder = lipgloss.Color("#00d75f")
@@ -66,8 +64,8 @@ func InitTheme(themeName string) {
 		colorGold = lipgloss.Color("#ffd700")
 		colorTeal = lipgloss.Color("#00d7d7")
 		colorTitleFg = lipgloss.Color("#202020")
+		colorBgPanelANSI = "\x1b[48;2;48;48;48m"
 	default:
-		colorBg = lipgloss.Color("#0d1117")
 		colorBgPanel = lipgloss.Color("#161b22")
 		colorBgHover = lipgloss.Color("#1f2937")
 		colorBorder = lipgloss.Color("#30363d")
@@ -83,9 +81,9 @@ func InitTheme(themeName string) {
 		colorGold = lipgloss.Color("#f59e0b")
 		colorTeal = lipgloss.Color("#14b8a6")
 		colorTitleFg = lipgloss.Color("#ffffff")
+		colorBgPanelANSI = "\x1b[48;2;22;27;34m"
 	}
 
-	baseStyle = lipgloss.NewStyle().Background(colorBg).Foreground(colorText)
 	titleBarStyle = lipgloss.NewStyle().Background(colorAccent).Foreground(colorTitleFg).Bold(true).Padding(0, 2)
 	subtitleStyle = lipgloss.NewStyle().Foreground(colorAccentAlt).Bold(true)
 	mutedStyle = lipgloss.NewStyle().Foreground(colorMuted)
