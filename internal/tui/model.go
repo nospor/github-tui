@@ -13,21 +13,32 @@ import (
 	gh "github-tui/internal/github"
 )
 
+type branchDetailView int
+
+const (
+	branchViewCommits branchDetailView = iota
+	branchViewCompare
+)
+
 type tabID int
 
 const (
 	tabPRs tabID = iota
-	tabIssues
+	tabBranches
+	tabTags
 	tabActions
+	tabIssues
 	tabRepos
 	tabCount
 )
 
 var tabLabels = [tabCount]string{
 	"1 Pull requests",
-	"2 Issues",
-	"3 Actions",
-	"4 Repos",
+	"2 Branches",
+	"3 Tags",
+	"4 Actions",
+	"5 Issues",
+	"6 Repos",
 }
 
 type appState int
@@ -41,6 +52,10 @@ const (
 	stateCreate
 	stateServerSelect
 	stateLinkSelect
+	stateCompareBranchSelect
+	stateCreateTag
+	stateEditTag
+	stateCreateIssueBranch
 )
 
 type (
@@ -98,6 +113,29 @@ type (
 		idx    int
 		client *gh.Client
 	}
+	branchesLoadedMsg struct {
+		branches []string
+	}
+	branchCommitsLoadedMsg struct {
+		branch  string
+		commits []*gh.CommitInfo
+	}
+	branchCompareLoadedMsg struct {
+		targetBranch string
+		sourceBranch string
+		compare      *gh.CompareInfo
+	}
+	commitDiffsLoadedMsg struct {
+		sha   string
+		files []*gh.DiffFile
+	}
+	tagsLoadedMsg struct {
+		tags []*gh.TagInfo
+	}
+	tagCommitsLoadedMsg struct {
+		tag     string
+		commits []*gh.CommitInfo
+	}
 )
 
 type linkItem struct {
@@ -152,6 +190,52 @@ type Model struct {
 	repoOffset  int
 	repoInput   textinput.Model
 
+	branches             []string
+	branchCursor         int
+	branchOffset         int
+	branchDetailView     branchDetailView
+	branchDetailName     string
+	branchCommits        []*gh.CommitInfo
+	branchCommitCursor   int
+	branchCompare        *gh.CompareInfo
+	branchCompareTarget  string
+	branchCompareCursor  int
+	compareSelectCursor  int
+	branchCommitDiffFiles        []*gh.DiffFile
+	branchCommitDiffFileIdx      int
+	branchCommitDiffLineCursor   int
+	branchCommitDiffScrollOffset int
+	branchCommitDiffPanelOpen    bool
+	branchCommitDiffLoading      bool
+	branchCommitDiffSHA          string
+
+	tags                         []*gh.TagInfo
+	tagCursor                    int
+	tagOffset                    int
+	tagDetailName                string
+	tagCommits                   []*gh.CommitInfo
+	tagCommitCursor              int
+	tagCommitDiffFiles           []*gh.DiffFile
+	tagCommitDiffFileIdx         int
+	tagCommitDiffLineCursor      int
+	tagCommitDiffScrollOffset    int
+	tagCommitDiffPanelOpen       bool
+	tagCommitDiffLoading         bool
+	tagCommitDiffSHA             string
+
+	createTagName         textinput.Model
+	createTagMessage      textarea.Model
+	createTagBranchCursor int
+	createTagField        int
+
+	editTagName        string
+	editTagDescription textarea.Model
+
+	createIssueBranchIssue *gh.IssueInfo
+	createIssueBranchName  textinput.Model
+	createIssueBranchRef   textinput.Model
+	createIssueBranchField int
+
 	detailPR     *gh.PullInfo
 	detailIssue  *gh.IssueInfo
 	detailRun    *gh.RunInfo
@@ -205,6 +289,22 @@ func New(cfg *config.Config, serverIdx int, client *gh.Client, repo *gh.RepoInfo
 	filter.Prompt = ""
 	filter.CharLimit = 128
 
+	tagName := textinput.New()
+	tagName.Placeholder = "Tag name"
+	tagName.CharLimit = 128
+
+	tagMsg := textarea.New()
+	tagMsg.Placeholder = "Tag message / release notes"
+	tagMsg.ShowLineNumbers = false
+
+	editTagDesc := textarea.New()
+	editTagDesc.ShowLineNumbers = false
+
+	issueBranchName := textinput.New()
+	issueBranchName.CharLimit = 256
+	issueBranchRef := textinput.New()
+	issueBranchRef.CharLimit = 256
+
 	m := Model{
 		cfg:        cfg,
 		serverIdx:  serverIdx,
@@ -222,8 +322,13 @@ func New(cfg *config.Config, serverIdx int, client *gh.Client, repo *gh.RepoInfo
 		titleInput: title,
 		headInput:  head,
 		baseInput:  base,
-		bodyInput:  body,
-		repoInput:  filter,
+		bodyInput:             body,
+		repoInput:             filter,
+		createTagName:         tagName,
+		createTagMessage:      tagMsg,
+		editTagDescription:    editTagDesc,
+		createIssueBranchName: issueBranchName,
+		createIssueBranchRef:  issueBranchRef,
 	}
 	if repo == nil {
 		m.tab = tabRepos
@@ -304,6 +409,90 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampList()
 		}
 		return m, nil
+	case branchesLoadedMsg:
+		m = m.finish()
+		m.branches = msg.branches
+		if m.tab == tabBranches {
+			m.clampList()
+		}
+		if m.state == stateCreateTag && m.repo != nil {
+			for i, b := range m.branches {
+				if b == m.repo.DefaultBranch {
+					m.createTagBranchCursor = i
+					break
+				}
+			}
+		}
+		return m, nil
+	case branchCommitsLoadedMsg:
+		m = m.finish()
+		m.branchCommits = msg.commits
+		m.branchDetailName = msg.branch
+		m.branchCommitCursor = 0
+		m.state = stateDetail
+		return m, nil
+	case branchCompareLoadedMsg:
+		m = m.finish()
+		m.branchCompare = msg.compare
+		m.branchCompareTarget = msg.targetBranch
+		m.branchDetailName = msg.sourceBranch
+		m.branchCompareCursor = 0
+		m.branchDetailView = branchViewCompare
+		m.state = stateDetail
+		return m, nil
+	case commitDiffsLoadedMsg:
+		m = m.finish()
+		m.branchCommitDiffLoading = false
+		m.tagCommitDiffLoading = false
+		var currentSHA string
+		if m.tab == tabTags {
+			if len(m.tagCommits) > 0 && m.tagCommitCursor < len(m.tagCommits) {
+				currentSHA = m.tagCommits[m.tagCommitCursor].ID
+			}
+			if currentSHA != "" && msg.sha == currentSHA {
+				m.tagCommitDiffFiles = msg.files
+				m.tagCommitDiffSHA = msg.sha
+				m.tagCommitDiffFileIdx = 0
+				m.tagCommitDiffLineCursor = 0
+				m.tagCommitDiffScrollOffset = 0
+			}
+		} else if m.branchDetailView == branchViewCompare {
+			if m.branchCompare != nil && m.branchCompareCursor < len(m.branchCompare.Commits) {
+				currentSHA = m.branchCompare.Commits[m.branchCompareCursor].ID
+			}
+			if currentSHA != "" && msg.sha == currentSHA {
+				m.branchCommitDiffFiles = msg.files
+				m.branchCommitDiffSHA = msg.sha
+				m.branchCommitDiffFileIdx = 0
+				m.branchCommitDiffLineCursor = 0
+				m.branchCommitDiffScrollOffset = 0
+			}
+		} else if len(m.branchCommits) > 0 && m.branchCommitCursor < len(m.branchCommits) {
+			currentSHA = m.branchCommits[m.branchCommitCursor].ID
+			if currentSHA == msg.sha {
+				m.branchCommitDiffFiles = msg.files
+				m.branchCommitDiffSHA = msg.sha
+				m.branchCommitDiffFileIdx = 0
+				m.branchCommitDiffLineCursor = 0
+				m.branchCommitDiffScrollOffset = 0
+			}
+		}
+		return m, nil
+	case tagsLoadedMsg:
+		m = m.finish()
+		m.tags = msg.tags
+		if m.tab == tabTags {
+			m.clampList()
+		}
+		return m, nil
+	case tagCommitsLoadedMsg:
+		m = m.finish()
+		m.tagCommits = msg.commits
+		m.tagDetailName = msg.tag
+		m.tagCommitCursor = 0
+		m.tagCommitDiffPanelOpen = false
+		m.state = stateDetail
+		return m, nil
 	case pullDetailMsg:
 		m = m.finish()
 		m.detailPR = msg.item
@@ -369,6 +558,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.repo = nil
 		m.username = ""
 		m.prs, m.issues, m.runs, m.repos = nil, nil, nil, nil
+		m.branches, m.tags = nil, nil
 		m.tab = tabRepos
 		m.state = stateMain
 		m.repoPage = 1
@@ -429,9 +619,20 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleComment(msg)
 	case stateCreate:
 		return m.handleCreate(msg)
+	case stateCreateTag:
+		return m.handleCreateTagKey(msg)
+	case stateEditTag:
+		return m.handleEditTagKey(msg)
+	case stateCreateIssueBranch:
+		return m.handleCreateIssueBranchKey(msg)
+	case stateCompareBranchSelect:
+		return m.handleCompareBranchSelectKey(msg.String())
 	case stateJobLog:
 		return m.handleLog(msg.String())
 	case stateDetail:
+		if m.inRefDetail() {
+			return m.handleRefDetail(msg.String())
+		}
 		return m.handleDetail(msg.String())
 	default:
 		return m.handleMain(msg.String())
@@ -455,10 +656,14 @@ func (m Model) handleMain(key string) (tea.Model, tea.Cmd) {
 	case "1":
 		return m.jumpTab(tabPRs)
 	case "2":
-		return m.jumpTab(tabIssues)
+		return m.jumpTab(tabBranches)
 	case "3":
-		return m.jumpTab(tabActions)
+		return m.jumpTab(tabTags)
 	case "4":
+		return m.jumpTab(tabActions)
+	case "5":
+		return m.jumpTab(tabIssues)
+	case "6":
 		return m.jumpTab(tabRepos)
 	case "j", "down":
 		m.move(1)
@@ -473,6 +678,9 @@ func (m Model) handleMain(key string) (tea.Model, tea.Cmd) {
 		m.setCursor(m.listLen() - 1)
 		return m, nil
 	case "enter":
+		if m.tab == tabBranches || m.tab == tabTags {
+			return m.openBranchOrTagDetail()
+		}
 		return m.openSelected()
 	case "r":
 		return m.track(m.reloadCurrent())
@@ -483,6 +691,9 @@ func (m Model) handleMain(key string) (tea.Model, tea.Cmd) {
 	case "s":
 		return m.cycleState()
 	case "c":
+		if m.tab == tabBranches || m.tab == tabTags {
+			return m.handleMainBranchTag("c")
+		}
 		return m.createOrCancel()
 	case "R":
 		return m.rerunSelected()
@@ -508,7 +719,7 @@ func (m Model) handleMain(key string) (tea.Model, tea.Cmd) {
 			return m, m.repoInput.Focus()
 		}
 	}
-	return m, nil
+	return m.handleMainBranchTag(key)
 }
 
 func (m *Model) blurRepoSearch() {
@@ -594,6 +805,7 @@ func (m Model) useSelectedRepo() (tea.Model, tea.Cmd) {
 	m.repo = repo
 	m.repoInput.Blur()
 	m.prs, m.issues, m.runs = nil, nil, nil
+	m.branches, m.tags = nil, nil
 	m.prPage, m.issuePage, m.runPage = 1, 1, 1
 	m.tab = tabPRs
 	m.state = stateMain
@@ -606,6 +818,7 @@ func (m Model) jumpTab(tab tabID) (tea.Model, tea.Cmd) {
 	}
 	m.tab = tab
 	m.state = stateMain
+	m.clearRefDetail()
 	m.clampList()
 	var cmds []tea.Cmd
 	if tab == tabRepos {
@@ -633,7 +846,12 @@ func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc":
 		m.state = stateMain
+		m.clearRefDetail()
 		return m, nil
+	case "b":
+		if m.detailIssue != nil && m.tab == tabIssues {
+			return m.startCreateBranchForIssue()
+		}
 	case "j", "down":
 		if m.detailRun != nil {
 			m.moveJob(1)
@@ -967,6 +1185,10 @@ func (m Model) needsLoad() bool {
 	switch m.tab {
 	case tabPRs:
 		return m.prs == nil
+	case tabBranches:
+		return m.branches == nil
+	case tabTags:
+		return m.tags == nil
 	case tabIssues:
 		return m.issues == nil
 	case tabActions:
@@ -983,6 +1205,16 @@ func (m Model) reloadCurrent() tea.Cmd {
 			return nil
 		}
 		return m.cmdPulls()
+	case tabBranches:
+		if m.repo == nil {
+			return nil
+		}
+		return m.cmdLoadBranches()
+	case tabTags:
+		if m.repo == nil {
+			return nil
+		}
+		return m.cmdLoadTags()
 	case tabIssues:
 		if m.repo == nil {
 			return nil
@@ -1017,6 +1249,10 @@ func (m *Model) listLen() int {
 	switch m.tab {
 	case tabPRs:
 		return len(m.prs)
+	case tabBranches:
+		return len(m.branches)
+	case tabTags:
+		return len(m.tags)
 	case tabIssues:
 		return len(m.issues)
 	case tabActions:
@@ -1032,6 +1268,10 @@ func (m *Model) cursorPair() (cursor *int, offset *int) {
 	switch m.tab {
 	case tabPRs:
 		return &m.prCursor, &m.prOffset
+	case tabBranches:
+		return &m.branchCursor, &m.branchOffset
+	case tabTags:
+		return &m.tagCursor, &m.tagOffset
 	case tabIssues:
 		return &m.issueCursor, &m.issueOffset
 	case tabActions:
@@ -1227,6 +1467,7 @@ func (m Model) openSelected() (tea.Model, tea.Cmd) {
 		m.repo = repo
 		m.repoInput.Blur()
 		m.prs, m.issues, m.runs = nil, nil, nil
+		m.branches, m.tags = nil, nil
 		m.prPage, m.issuePage, m.runPage = 1, 1, 1
 		m.tab = tabPRs
 		return m.track(m.cmdPulls())

@@ -264,6 +264,8 @@ func (m Model) openSelectedLink() (tea.Model, tea.Cmd) {
 		if m.runCursor >= 0 && m.runCursor < len(m.runs) {
 			raw = m.runs[m.runCursor].HTMLURL
 		}
+	case tabBranches, tabTags:
+		raw = m.branchTagURL()
 	case tabRepos:
 		if repo := m.selectedRepo(); repo != nil {
 			raw = repo.HTMLURL
@@ -305,6 +307,8 @@ func (m Model) yankSelected() (tea.Model, tea.Cmd) {
 		if m.runCursor >= 0 && m.runCursor < len(m.runs) {
 			raw = m.runs[m.runCursor].HTMLURL
 		}
+	case tabBranches, tabTags:
+		raw = m.branchTagURL()
 	case tabRepos:
 		if repo := m.selectedRepo(); repo != nil {
 			raw = repo.HTMLURL

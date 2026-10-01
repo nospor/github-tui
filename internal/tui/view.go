@@ -14,7 +14,7 @@ func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "Loading…"
 	}
-	body := m.viewBody()
+	body := padHeight(m.viewBody(), m.bodyHeight())
 	screen := lipgloss.JoinVertical(lipgloss.Left, m.viewTitle(), m.viewTabs(), body, m.viewFooter(), m.viewStatus())
 	return clipHeight(screen, m.height)
 }
@@ -28,6 +28,20 @@ func clipHeight(s string, height int) string {
 		return strings.Join(lines, "\n")
 	}
 	return strings.Join(lines[:height], "\n")
+}
+
+func padHeight(s string, height int) string {
+	if height <= 0 {
+		return s
+	}
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) > height {
+		return strings.Join(lines[:height], "\n")
+	}
+	for len(lines) < height {
+		lines = append(lines, "")
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (m Model) viewTitle() string {
@@ -88,6 +102,19 @@ func (m Model) hints() string {
 	case stateJobLog:
 		return joinHints([][2]string{{"j/k", "scroll"}, {"g/G", "top/bottom"}, {"esc", "back"}})
 	case stateDetail:
+		if m.inRefDetail() {
+			if m.branchCommitDiffPanelOpen || m.tagCommitDiffPanelOpen {
+				return joinHints([][2]string{
+					{"j/k", "scroll diff"}, {"n/p", "file"}, {"J/K", "hunk"},
+					{"tab", "close diff"}, {"esc", "back"}, {"q", "quit"},
+				})
+			}
+			h := [][2]string{{"j/k", "commits"}, {"tab", "diff"}, {"esc", "back"}, {"q", "quit"}}
+			if m.tab == tabTags {
+				h = append([][2]string{{"e", "edit tag"}}, h...)
+			}
+			return joinHints(h)
+		}
 		if m.detailRun != nil {
 			return joinHints([][2]string{
 				{"j/k", "job"}, {"enter", "log"}, {"R", "rerun"}, {"c", "cancel"},
@@ -95,19 +122,23 @@ func (m Model) hints() string {
 			})
 		}
 		return joinHints([][2]string{
-			{"j/k", "scroll"}, {"C", "comment"}, {"m", "merge"}, {"x", "close"},
+			{"j/k", "scroll"}, {"C", "comment"}, {"b", "branch"}, {"m", "merge"}, {"x", "close"},
 			{"O", "reopen"}, {"o", "open"}, {"y", "yank"}, {"esc", "back"},
 		})
 	default:
 		h := [][2]string{
-			{"1-4", "tabs"}, {"j/k", "move"}, {"enter", "open"}, {"r", "refresh"},
+			{"1-6", "tabs"}, {"j/k", "move"}, {"enter", "open"}, {"r", "refresh"},
 			{"n/p", "page"}, {"o", "browser"}, {"y", "yank"}, {"S", "server"}, {"q", "quit"},
 		}
 		switch m.tab {
 		case tabPRs:
 			h = append([][2]string{{"s", "state"}, {"c", "create"}, {"m", "merge"}, {"x", "close"}, {"O", "reopen"}}, h...)
+		case tabBranches:
+			h = append([][2]string{{"c", "create PR"}, {"C", "compare"}, {"d", "delete"}}, h...)
+		case tabTags:
+			h = append([][2]string{{"c", "create tag"}, {"d", "delete"}}, h...)
 		case tabIssues:
-			h = append([][2]string{{"s", "state"}, {"c", "create"}, {"x", "close"}, {"O", "reopen"}}, h...)
+			h = append([][2]string{{"s", "state"}, {"c", "create"}, {"b", "branch"}, {"x", "close"}, {"O", "reopen"}}, h...)
 		case tabActions:
 			h = append([][2]string{{"R", "rerun"}, {"c", "cancel"}}, h...)
 		case tabRepos:
@@ -140,9 +171,20 @@ func (m Model) viewBody() string {
 		return m.placeDialog(subtitleStyle.Render("Comment"), "ctrl+s posts the comment", m.bodyInput.View())
 	case stateCreate:
 		return m.viewCreate()
+	case stateCreateTag:
+		return m.viewCreateTag()
+	case stateEditTag:
+		return m.viewEditTag()
+	case stateCreateIssueBranch:
+		return m.viewCreateIssueBranch()
+	case stateCompareBranchSelect:
+		return m.viewCompareBranchSelect()
 	case stateJobLog:
 		return m.viewLog()
 	case stateDetail:
+		if m.inRefDetail() {
+			return m.viewRefDetail()
+		}
 		if m.detailRun != nil {
 			return m.viewRun()
 		}
@@ -305,6 +347,12 @@ const (
 )
 
 func (m Model) viewListCore() string {
+	if m.tab == tabBranches {
+		return m.viewBranchList(m.listHeight() + 2)
+	}
+	if m.tab == tabTags {
+		return m.viewTagList(m.listHeight() + 2)
+	}
 	title := m.listTitle()
 	rows := m.listRows()
 	height := m.listHeight()
@@ -351,6 +399,10 @@ func (m Model) listTitle() string {
 	switch m.tab {
 	case tabPRs:
 		return fmt.Sprintf("Pull requests · %s · page %d", m.prState, m.prPage)
+	case tabBranches:
+		return "Branches"
+	case tabTags:
+		return "Tags"
 	case tabIssues:
 		return fmt.Sprintf("Issues · %s · page %d", m.issueState, m.issuePage)
 	case tabActions:
@@ -368,6 +420,10 @@ func (m Model) emptyList() string {
 	switch m.tab {
 	case tabPRs:
 		return "No pull requests."
+	case tabBranches:
+		return "No branches."
+	case tabTags:
+		return "No tags."
 	case tabIssues:
 		return "No issues."
 	case tabActions:

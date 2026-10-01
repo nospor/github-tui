@@ -7,7 +7,9 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 ## Features
 
 - **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, open, merge, close, reopen, and create
-- **Issues** — list, filter, read, comment, create, close, and reopen
+- **Branches** — list, delete, open a branch to browse commits with diff pane (`Tab`), compare two branches (`C`), create a pull request from a branch (`c`)
+- **Tags** — list, create (name, ref branch, message), edit GitHub release notes (`e` in tag detail), delete, browse commits with diff pane
+- **Issues** — list, filter, read, comment, create, close, reopen, and create a git branch for an issue (`b`)
 - **Actions** — list workflow runs, inspect jobs, read job logs, re-run, and cancel
 - **Repositories** — browse repos the token can access, search the list as you type, and switch the working repo
 - **Servers** — github.com and GitHub Enterprise, selected from config
@@ -16,7 +18,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 - **YouTrack** — optional issue-key links (`PROJ-123`) in descriptions and comments
 - **Themes** — `catppuccin` (default) and `teams`
 
-This first version does not include the GitLab app's diff viewer, branch and tag management, or container registry. GitHub fine-grained tokens also cannot call the Packages API.
+Pull request and issue detail views do not include an inline diff viewer (branch/tag commit views do). There is no container registry tab. GitHub fine-grained tokens also cannot call the Packages API.
 
 ## Install
 
@@ -77,11 +79,14 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 
 | Key | Action |
 | --- | --- |
-| `1`–`4` / `Tab` | Pull requests, Issues, Actions, Repos |
+| `1`–`6` / `Tab` | Pull requests, Branches, Tags, Actions, Issues, Repos |
 | `j` / `k` | Move |
 | `Enter` | Open the item, or select the highlighted repository |
 | `s` | Cycle open / closed / all |
-| `c` | Create a pull request or issue. On Actions, cancel the run |
+| `c` | Create a pull request or issue. On Branches, open create PR with head prefilled. On Tags, create a tag. On Actions, cancel the run |
+| `C` | On Branches (list), compare with another branch |
+| `d` | On Branches or Tags (list), delete the selected branch or tag |
+| `b` | On Issues (list or detail), create a git branch for the issue |
 | `m` | Merge the pull request |
 | `x` / `O` | Close / reopen |
 | `R` | Re-run a workflow |
