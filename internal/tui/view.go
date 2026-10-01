@@ -16,7 +16,18 @@ func (m Model) View() string {
 	}
 	body := m.viewBody()
 	screen := lipgloss.JoinVertical(lipgloss.Left, m.viewTitle(), m.viewTabs(), body, m.viewFooter(), m.viewStatus())
-	return lipgloss.NewStyle().Width(m.width).Render(screen)
+	return clipHeight(screen, m.height)
+}
+
+func clipHeight(s string, height int) string {
+	if height <= 0 {
+		return s
+	}
+	lines := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(lines) <= height {
+		return strings.Join(lines, "\n")
+	}
+	return strings.Join(lines[:height], "\n")
 }
 
 func (m Model) viewTitle() string {
@@ -32,7 +43,10 @@ func (m Model) viewTitle() string {
 	if user == "" {
 		user = "…"
 	}
-	left := fmt.Sprintf(" github-tui   %s   %s   %s", srv, user, repo)
+	left := fmt.Sprintf(" github-tui   %s   %s", srv, user)
+	if m.tab != tabRepos {
+		left += "   " + repo
+	}
 	if m.loading {
 		left += "   loading…"
 	}
@@ -578,7 +592,10 @@ func (m Model) viewLog() string {
 }
 
 func (m Model) bodyHeight() int {
-	h := m.height - 4
+	h := m.height - 3 // title, tabs, footer
+	if m.status != "" {
+		h--
+	}
 	if h < 3 {
 		return 3
 	}
@@ -586,12 +603,15 @@ func (m Model) bodyHeight() int {
 }
 
 func (m Model) listHeight() int {
-	h := m.bodyHeight() - 2
-	if m.tab == tabRepos {
-		h -= 4 // search, blank line, header, rule
+	h := m.bodyHeight() - 2 // list subtitle + one list row slot
+	if m.listLen() == 0 {
+		h -= 1 // empty-list message line
 	}
-	if h < 3 {
-		return 3
+	if m.tab == tabRepos {
+		h -= 5 // search, blank line, column header, rule, spacer
+	}
+	if h < 1 {
+		return 1
 	}
 	return h
 }
