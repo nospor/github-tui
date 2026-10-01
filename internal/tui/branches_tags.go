@@ -6,7 +6,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 
 	gh "github-tui/internal/github"
 )
@@ -141,7 +140,7 @@ func (m Model) handleCompareBranchSelectKey(key string) (tea.Model, tea.Cmd) {
 func (m Model) viewCompareBranchSelect() string {
 	var rows []string
 	rows = append(rows, subtitleStyle.Render("Select branch to compare with"), "")
-	
+
 	list := m.compareBranchList()
 	if len(list) == 0 {
 		rows = append(rows, dimStyle.Render("  No other branches found."))
@@ -510,7 +509,7 @@ func (m *Model) updateBranchCommitDiffScroll() {
 		m.branchCommitDiffScrollOffset = m.branchCommitDiffLineCursor
 	}
 
-	if m.branchCommitDiffLineCursor >= m.branchCommitDiffScrollOffset + diffHeight {
+	if m.branchCommitDiffLineCursor >= m.branchCommitDiffScrollOffset+diffHeight {
 		m.branchCommitDiffScrollOffset = m.branchCommitDiffLineCursor - diffHeight + 1
 	}
 
@@ -524,126 +523,7 @@ func (m *Model) updateBranchCommitDiffScroll() {
 
 // viewBranchCommitDiffPanel renders the changes panel for the selected commit.
 func (m Model) viewBranchCommitDiffPanel(w, h int) string {
-	var lines []string
-
-	if m.branchCommitDiffLoading {
-		lines = append(lines,
-			subtitleStyle.Render("  Changes"),
-			"",
-			dimStyle.Render("  Loading diffs..."),
-		)
-		return strings.Join(lines, "\n")
-	}
-
-	if len(m.branchCommitDiffFiles) == 0 {
-		lines = append(lines,
-			subtitleStyle.Render("  Changes"),
-			"",
-			dimStyle.Render("  No files changed or no diff found."),
-		)
-		return strings.Join(lines, "\n")
-	}
-
-	// File list header
-	fileCount := len(m.branchCommitDiffFiles)
-	headerLine := subtitleStyle.Render("  Changes ") +
-		dimStyle.Render(fmt.Sprintf("(%d file(s))  n/p=file, J/K=hunk", fileCount))
-	lines = append(lines, headerLine)
-
-	// File tabs (show nearby files)
-	var fileTabs []string
-	startIdx := m.branchCommitDiffFileIdx - 1
-	if startIdx < 0 {
-		startIdx = 0
-	}
-	endIdx := startIdx + 3
-	if endIdx > len(m.branchCommitDiffFiles) {
-		endIdx = len(m.branchCommitDiffFiles)
-		startIdx = endIdx - 3
-		if startIdx < 0 {
-			startIdx = 0
-		}
-	}
-
-	for i := startIdx; i < endIdx; i++ {
-		f := m.branchCommitDiffFiles[i]
-		name := f.NewPath
-		counts := diffCounts(f)
-		limit := w - 7 - len(counts)
-		if limit < 35 {
-			limit = 35
-		}
-		name = truncatePath(name, limit)
-		label := fmt.Sprintf("%s %s", counts, name)
-		if i == m.branchCommitDiffFileIdx {
-			fileTabs = append(fileTabs, accentStyle.Render(" ▶ "+label))
-		} else {
-			fileTabs = append(fileTabs, dimStyle.Render("   "+label))
-		}
-	}
-	lines = append(lines, strings.Join(fileTabs, "\n"))
-	lines = append(lines, lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", w-2)))
-
-	tabsLen := endIdx - startIdx
-	diffHeight := h - (4 + tabsLen)
-	if diffHeight < 1 {
-		diffHeight = 1
-	}
-
-	// Current file diff lines
-	f := m.branchCommitDiffFiles[m.branchCommitDiffFileIdx]
-	renderedCount := 0
-
-	if len(f.Lines) == 0 {
-		lines = append(lines, dimStyle.Render("  (diff unavailable — file is too large or collapsed)"))
-		renderedCount++
-	}
-
-	for i := m.branchCommitDiffScrollOffset; i < len(f.Lines) && renderedCount < diffHeight; i++ {
-		dl := f.Lines[i]
-		selected := i == m.branchCommitDiffLineCursor
-		content := dl.Content
-		// Clip to panel width (use display-width, not byte length)
-		avail := w - 5
-		if avail < 1 {
-			avail = 1
-		}
-		if lipgloss.Width(content) > avail {
-			content = ansi.Truncate(content, avail-1, "…")
-		}
-
-		var rendered string
-		switch dl.Type {
-		case "added":
-			st := lipgloss.NewStyle().Foreground(colorSuccess)
-			if selected {
-				st = st.Background(colorBgHover).Bold(true)
-			}
-			rendered = st.Render("▶ " + content)
-		case "removed":
-			st := lipgloss.NewStyle().Foreground(colorError)
-			if selected {
-				st = st.Background(colorBgHover).Bold(true)
-			}
-			rendered = st.Render("▶ " + content)
-		case "hunk":
-			st := lipgloss.NewStyle().Foreground(colorInfo).Italic(true)
-			if selected {
-				st = st.Background(colorBgHover).Bold(true)
-			}
-			rendered = st.Render("  " + content)
-		default:
-			st := lipgloss.NewStyle().Foreground(colorTextDim)
-			if selected {
-				st = st.Background(colorBgHover)
-			}
-			rendered = st.Render("  " + content)
-		}
-		lines = append(lines, rendered)
-		renderedCount++
-	}
-
-	return strings.Join(lines, "\n")
+	return viewDiffFilesPanel(m.branchCommitDiffFiles, m.branchCommitDiffFileIdx, m.branchCommitDiffLineCursor, m.branchCommitDiffScrollOffset, m.branchCommitDiffLoading, w, h)
 }
 
 func (m Model) viewBranchCommitsSplit(bodyH int) string {
@@ -1152,127 +1032,7 @@ func (m Model) viewTagCommitsSplit(bodyH int) string {
 }
 
 func (m Model) viewTagCommitDiffPanel(w, h int) string {
-	var lines []string
-
-	if m.tagCommitDiffLoading {
-		lines = append(lines,
-			subtitleStyle.Render("  Changes"),
-			"",
-			dimStyle.Render("  Loading diffs..."),
-		)
-		return strings.Join(lines, "\n")
-	}
-
-	if len(m.tagCommitDiffFiles) == 0 {
-		lines = append(lines,
-			subtitleStyle.Render("  Changes"),
-			"",
-			dimStyle.Render("  No files changed or no diff found."),
-		)
-		return strings.Join(lines, "\n")
-	}
-
-	// File list header
-	fileCount := len(m.tagCommitDiffFiles)
-	headerLine := subtitleStyle.Render("  Changes ") +
-		dimStyle.Render(fmt.Sprintf("(%d file(s))  n/p=file, J/K=hunk", fileCount))
-	lines = append(lines, headerLine)
-
-	// File tabs
-	var fileTabs []string
-	startIdx := m.tagCommitDiffFileIdx - 1
-	if startIdx < 0 {
-		startIdx = 0
-	}
-	endIdx := startIdx + 3
-	if endIdx > len(m.tagCommitDiffFiles) {
-		endIdx = len(m.tagCommitDiffFiles)
-		startIdx = endIdx - 3
-		if startIdx < 0 {
-			startIdx = 0
-		}
-	}
-
-	for i := startIdx; i < endIdx; i++ {
-		f := m.tagCommitDiffFiles[i]
-		name := f.NewPath
-		counts := diffCounts(f)
-		limit := w - 7 - len(counts)
-		if limit < 35 {
-			limit = 35
-		}
-		name = truncatePath(name, limit)
-		label := fmt.Sprintf("%s %s", counts, name)
-		if i == m.tagCommitDiffFileIdx {
-			fileTabs = append(fileTabs, accentStyle.Render(" ▶ "+label))
-		} else {
-			fileTabs = append(fileTabs, dimStyle.Render("   "+label))
-		}
-	}
-	lines = append(lines, strings.Join(fileTabs, "\n"))
-	lines = append(lines, lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", w-2)))
-
-	tabsLen := endIdx - startIdx
-	diffHeight := h - (4 + tabsLen)
-	if diffHeight < 1 {
-		diffHeight = 1
-	}
-
-	// File diff content
-	if m.tagCommitDiffFileIdx < len(m.tagCommitDiffFiles) {
-		f := m.tagCommitDiffFiles[m.tagCommitDiffFileIdx]
-		renderedCount := 0
-
-		if len(f.Lines) == 0 {
-			lines = append(lines, dimStyle.Render("  (diff unavailable — file is too large or collapsed)"))
-			renderedCount++
-		}
-
-		for i := m.tagCommitDiffScrollOffset; i < len(f.Lines) && renderedCount < diffHeight; i++ {
-			dl := f.Lines[i]
-			selected := i == m.tagCommitDiffLineCursor
-			content := dl.Content
-			avail := w - 5
-			if avail < 1 {
-				avail = 1
-			}
-			if lipgloss.Width(content) > avail {
-				content = ansi.Truncate(content, avail-1, "…")
-			}
-
-			var rendered string
-			switch dl.Type {
-			case "added":
-				st := lipgloss.NewStyle().Foreground(colorSuccess)
-				if selected {
-					st = st.Background(colorBgHover).Bold(true)
-				}
-				rendered = st.Render("▶ " + content)
-			case "removed":
-				st := lipgloss.NewStyle().Foreground(colorError)
-				if selected {
-					st = st.Background(colorBgHover).Bold(true)
-				}
-				rendered = st.Render("▶ " + content)
-			case "hunk":
-				st := lipgloss.NewStyle().Foreground(colorInfo).Italic(true)
-				if selected {
-					st = st.Background(colorBgHover).Bold(true)
-				}
-				rendered = st.Render("  " + content)
-			default:
-				st := lipgloss.NewStyle().Foreground(colorTextDim)
-				if selected {
-					st = st.Background(colorBgHover)
-				}
-				rendered = st.Render("  " + content)
-			}
-			lines = append(lines, rendered)
-			renderedCount++
-		}
-	}
-
-	return strings.Join(lines, "\n")
+	return viewDiffFilesPanel(m.tagCommitDiffFiles, m.tagCommitDiffFileIdx, m.tagCommitDiffLineCursor, m.tagCommitDiffScrollOffset, m.tagCommitDiffLoading, w, h)
 }
 
 func (m Model) viewCreateTag() string {

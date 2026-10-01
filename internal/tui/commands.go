@@ -87,6 +87,11 @@ func (m Model) cmdPull(number int) tea.Cmd {
 		if err != nil {
 			msg.commentErr = err.Error()
 		}
+		files, derr := client.GetPullDiffs(full, number)
+		msg.files = files
+		if derr != nil {
+			msg.diffErr = derr.Error()
+		}
 		return msg
 	}
 }

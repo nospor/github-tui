@@ -115,16 +115,26 @@ func (m Model) hints() string {
 			}
 			return joinHints(h)
 		}
+		if m.prDiffPanelOpen && m.detailPR != nil {
+			return joinHints([][2]string{
+				{"j/k", "scroll diff"}, {"n/p", "file"}, {"J/K", "hunk"},
+				{"tab", "close diff"}, {"esc", "back"}, {"q", "quit"},
+			})
+		}
 		if m.detailRun != nil {
 			return joinHints([][2]string{
 				{"j/k", "job"}, {"enter", "log"}, {"R", "rerun"}, {"c", "cancel"},
 				{"o", "open"}, {"y", "yank"}, {"esc", "back"},
 			})
 		}
-		return joinHints([][2]string{
+		h := [][2]string{
 			{"j/k", "scroll"}, {"C", "comment"}, {"b", "branch"}, {"m", "merge"}, {"x", "close"},
 			{"O", "reopen"}, {"o", "open"}, {"y", "yank"}, {"esc", "back"},
-		})
+		}
+		if m.detailPR != nil {
+			h = append([][2]string{{"tab", "diff"}}, h...)
+		}
+		return joinHints(h)
 	default:
 		h := [][2]string{
 			{"1-6", "tabs"}, {"j/k", "move"}, {"enter", "open"}, {"r", "refresh"},
@@ -188,6 +198,9 @@ func (m Model) viewBody() string {
 		if m.detailRun != nil {
 			return m.viewRun()
 		}
+		if m.prDiffPanelOpen && m.detailPR != nil {
+			return m.viewPRDetailSplit()
+		}
 		return m.viewTextDetail()
 	default:
 		return m.viewList()
@@ -199,6 +212,9 @@ func (m Model) viewBodyForState(st appState) string {
 	case stateDetail:
 		if m.detailRun != nil {
 			return m.viewRun()
+		}
+		if m.prDiffPanelOpen && m.detailPR != nil {
+			return m.viewPRDetailSplit()
 		}
 		return m.viewTextDetail()
 	case stateJobLog:
@@ -551,6 +567,10 @@ func (m Model) viewTextDetail() string {
 
 func (m *Model) rebuildDetail() {
 	width := max(20, m.width-2)
+	if m.prDiffPanelOpen && m.detailPR != nil {
+		leftW, _ := m.splitPaneWidths()
+		width = max(20, leftW-2)
+	}
 	var lines []string
 	add := func(s string) { lines = append(lines, s) }
 	switch {

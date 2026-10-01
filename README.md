@@ -6,7 +6,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 
 ## Features
 
-- **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, open, merge, close, reopen, and create
+- **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, open, merge, close, reopen, create, and inspect the file diff (`Tab`)
 - **Branches** — list, delete, open a branch to browse commits with diff pane (`Tab`), compare two branches (`C`), create a pull request from a branch (`c`)
 - **Tags** — list, create (name, ref branch, message), edit GitHub release notes (`e` in tag detail), delete, browse commits with diff pane
 - **Issues** — list, filter, read, comment, create, close, reopen, and create a git branch for an issue (`b`)
@@ -18,7 +18,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 - **YouTrack** — optional issue-key links (`PROJ-123`) in descriptions and comments
 - **Themes** — `catppuccin` (default) and `teams`
 
-Pull request and issue detail views do not include an inline diff viewer (branch/tag commit views do). There is no container registry tab. GitHub fine-grained tokens also cannot call the Packages API.
+There is no container registry tab. GitHub fine-grained tokens also cannot call the Packages API.
 
 ## Install
 
@@ -84,13 +84,13 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 | `Enter` | Open the item, or select the highlighted repository |
 | `s` | Cycle open / closed / all |
 | `c` | Create a pull request or issue. On Branches, open create PR with head prefilled. On Tags, create a tag. On Actions, cancel the run |
-| `C` | On Branches (list), compare with another branch |
+| `C` | Comment on the open pull request or issue. On Branches (list), compare with another branch |
+| `Tab` | Next tab on lists. In a pull request, branch, or tag detail: toggle the diff pane |
 | `d` | On Branches or Tags (list), delete the selected branch or tag |
 | `b` | On Issues (list or detail), create a git branch for the issue |
 | `m` | Merge the pull request |
 | `x` / `O` | Close / reopen |
 | `R` | Re-run a workflow |
-| `C` | Comment on the open pull request or issue |
 | `r` | Refresh |
 | `n` / `p` | Next / previous page |
 | Repos tab | Type to search (letters including j/k), `↑`/`↓` to move, `Enter` to use the repo and open Pull requests, `Esc` to clear, `PgUp`/`PgDn` to page |

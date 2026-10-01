@@ -177,6 +177,43 @@ func (c *Client) GetCommitDiffs(full, sha string) ([]*DiffFile, error) {
 	return out, nil
 }
 
+// GetPullDiffs returns per-file diffs for a pull request.
+func (c *Client) GetPullDiffs(full string, number int) ([]*DiffFile, error) {
+	owner, name, err := SplitRepo(full)
+	if err != nil {
+		return nil, err
+	}
+	var out []*DiffFile
+	page := 1
+	for {
+		opts := &gh.ListOptions{Page: page, PerPage: 100}
+		files, resp, err := c.raw.PullRequests.ListFiles(context.Background(), owner, name, number, opts)
+		if err != nil {
+			return nil, apiErr(fmt.Sprintf("list pull request #%d files", number), err)
+		}
+		for _, f := range files {
+			if f == nil {
+				continue
+			}
+			df := mapPatchFile(f.GetFilename(), f.GetPatch())
+			df.OldPath = f.GetPreviousFilename()
+			if df.OldPath == "" {
+				df.OldPath = f.GetFilename()
+			}
+			df.NewPath = f.GetFilename()
+			df.NewFile = f.GetStatus() == "added"
+			df.DeletedFile = f.GetStatus() == "removed"
+			df.RenamedFile = f.GetStatus() == "renamed"
+			out = append(out, df)
+		}
+		if resp == nil || resp.NextPage == 0 {
+			break
+		}
+		page = resp.NextPage
+	}
+	return out, nil
+}
+
 // ListTags lists repository tags.
 func (c *Client) ListTags(full string) ([]*TagInfo, error) {
 	owner, name, err := SplitRepo(full)

@@ -86,6 +86,8 @@ type (
 		comments   []*gh.CommentInfo
 		truncated  bool
 		commentErr string
+		files      []*gh.DiffFile
+		diffErr    string
 	}
 	issueDetailMsg struct {
 		item       *gh.IssueInfo
@@ -190,17 +192,17 @@ type Model struct {
 	repoOffset  int
 	repoInput   textinput.Model
 
-	branches             []string
-	branchCursor         int
-	branchOffset         int
-	branchDetailView     branchDetailView
-	branchDetailName     string
-	branchCommits        []*gh.CommitInfo
-	branchCommitCursor   int
-	branchCompare        *gh.CompareInfo
-	branchCompareTarget  string
-	branchCompareCursor  int
-	compareSelectCursor  int
+	branches                     []string
+	branchCursor                 int
+	branchOffset                 int
+	branchDetailView             branchDetailView
+	branchDetailName             string
+	branchCommits                []*gh.CommitInfo
+	branchCommitCursor           int
+	branchCompare                *gh.CompareInfo
+	branchCompareTarget          string
+	branchCompareCursor          int
+	compareSelectCursor          int
 	branchCommitDiffFiles        []*gh.DiffFile
 	branchCommitDiffFileIdx      int
 	branchCommitDiffLineCursor   int
@@ -209,19 +211,19 @@ type Model struct {
 	branchCommitDiffLoading      bool
 	branchCommitDiffSHA          string
 
-	tags                         []*gh.TagInfo
-	tagCursor                    int
-	tagOffset                    int
-	tagDetailName                string
-	tagCommits                   []*gh.CommitInfo
-	tagCommitCursor              int
-	tagCommitDiffFiles           []*gh.DiffFile
-	tagCommitDiffFileIdx         int
-	tagCommitDiffLineCursor      int
-	tagCommitDiffScrollOffset    int
-	tagCommitDiffPanelOpen       bool
-	tagCommitDiffLoading         bool
-	tagCommitDiffSHA             string
+	tags                      []*gh.TagInfo
+	tagCursor                 int
+	tagOffset                 int
+	tagDetailName             string
+	tagCommits                []*gh.CommitInfo
+	tagCommitCursor           int
+	tagCommitDiffFiles        []*gh.DiffFile
+	tagCommitDiffFileIdx      int
+	tagCommitDiffLineCursor   int
+	tagCommitDiffScrollOffset int
+	tagCommitDiffPanelOpen    bool
+	tagCommitDiffLoading      bool
+	tagCommitDiffSHA          string
 
 	createTagName         textinput.Model
 	createTagMessage      textarea.Model
@@ -236,19 +238,24 @@ type Model struct {
 	createIssueBranchRef   textinput.Model
 	createIssueBranchField int
 
-	detailPR     *gh.PullInfo
-	detailIssue  *gh.IssueInfo
-	detailRun    *gh.RunInfo
-	comments     []*gh.CommentInfo
-	commentNote  string
-	jobs         []*gh.JobInfo
-	jobCursor    int
-	jobOffset    int
-	detailScroll int
-	detailLines  []string
-	logName      string
-	logLines     []string
-	logScroll    int
+	detailPR           *gh.PullInfo
+	prDiffFiles        []*gh.DiffFile
+	prDiffFileIdx      int
+	prDiffLineCursor   int
+	prDiffScrollOffset int
+	prDiffPanelOpen    bool
+	detailIssue        *gh.IssueInfo
+	detailRun          *gh.RunInfo
+	comments           []*gh.CommentInfo
+	commentNote        string
+	jobs               []*gh.JobInfo
+	jobCursor          int
+	jobOffset          int
+	detailScroll       int
+	detailLines        []string
+	logName            string
+	logLines           []string
+	logScroll          int
 
 	formKind   string
 	formFocus  int
@@ -306,22 +313,22 @@ func New(cfg *config.Config, serverIdx int, client *gh.Client, repo *gh.RepoInfo
 	issueBranchRef.CharLimit = 256
 
 	m := Model{
-		cfg:        cfg,
-		serverIdx:  serverIdx,
-		client:     client,
-		repo:       repo,
-		status:     startupWarn,
-		openKind:   openKind,
-		openNumber: openNumber,
-		prState:    "open",
-		prPage:     1,
-		issueState: "open",
-		issuePage:  1,
-		runPage:    1,
-		repoPage:   1,
-		titleInput: title,
-		headInput:  head,
-		baseInput:  base,
+		cfg:                   cfg,
+		serverIdx:             serverIdx,
+		client:                client,
+		repo:                  repo,
+		status:                startupWarn,
+		openKind:              openKind,
+		openNumber:            openNumber,
+		prState:               "open",
+		prPage:                1,
+		issueState:            "open",
+		issuePage:             1,
+		runPage:               1,
+		repoPage:              1,
+		titleInput:            title,
+		headInput:             head,
+		baseInput:             base,
 		bodyInput:             body,
 		repoInput:             filter,
 		createTagName:         tagName,
@@ -501,14 +508,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.comments = msg.comments
 		m.commentNote = commentNote(msg.truncated, msg.commentErr)
 		m.detailScroll = 0
+		m.prDiffFiles = msg.files
+		m.prDiffFileIdx = 0
+		m.prDiffLineCursor = 0
+		m.prDiffScrollOffset = 0
 		m.state = stateDetail
 		m.rebuildDetail()
+		if msg.diffErr != "" {
+			m.setStatus(msg.diffErr)
+			return m, m.scheduleClear()
+		}
 		return m, nil
 	case issueDetailMsg:
 		m = m.finish()
 		m.detailIssue = msg.item
 		m.detailPR = nil
 		m.detailRun = nil
+		m.clearPRDiff()
 		m.comments = msg.comments
 		m.commentNote = commentNote(msg.truncated, msg.commentErr)
 		m.detailScroll = 0
@@ -521,6 +537,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.jobs = msg.jobs
 		m.detailPR = nil
 		m.detailIssue = nil
+		m.clearPRDiff()
 		m.jobCursor = 0
 		m.jobOffset = 0
 		m.state = stateDetail
@@ -819,6 +836,7 @@ func (m Model) jumpTab(tab tabID) (tea.Model, tea.Cmd) {
 	m.tab = tab
 	m.state = stateMain
 	m.clearRefDetail()
+	m.clearPRDiff()
 	m.clampList()
 	var cmds []tea.Cmd
 	if tab == tabRepos {
@@ -841,13 +859,62 @@ func (m Model) jumpTab(tab tabID) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
+	if m.prDiffPanelOpen {
+		switch key {
+		case "q":
+			return m, tea.Quit
+		case "esc", "tab":
+			m.prDiffPanelOpen = false
+			m.rebuildDetail()
+			return m, nil
+		case "j", "down":
+			m.prDiffLineCursorDown()
+			m.updatePRDiffScroll()
+			return m, nil
+		case "k", "up":
+			m.prDiffLineCursorUp()
+			m.updatePRDiffScroll()
+			return m, nil
+		case "J":
+			m.prDiffNextHunk()
+			m.updatePRDiffScroll()
+			return m, nil
+		case "K":
+			m.prDiffPrevHunk()
+			m.updatePRDiffScroll()
+			return m, nil
+		case "n":
+			if m.prDiffFileIdx < len(m.prDiffFiles)-1 {
+				m.prDiffFileIdx++
+				m.prDiffLineCursor = 0
+				m.prDiffScrollOffset = 0
+				m.updatePRDiffScroll()
+			}
+			return m, nil
+		case "p":
+			if m.prDiffFileIdx > 0 {
+				m.prDiffFileIdx--
+				m.prDiffLineCursor = 0
+				m.prDiffScrollOffset = 0
+				m.updatePRDiffScroll()
+			}
+			return m, nil
+		}
+	}
 	switch key {
 	case "q":
 		return m, tea.Quit
 	case "esc":
 		m.state = stateMain
 		m.clearRefDetail()
+		m.clearPRDiff()
 		return m, nil
+	case "tab":
+		if m.detailPR != nil {
+			m.prDiffPanelOpen = true
+			m.rebuildDetail()
+			return m, nil
+		}
 	case "b":
 		if m.detailIssue != nil && m.tab == tabIssues {
 			return m.startCreateBranchForIssue()

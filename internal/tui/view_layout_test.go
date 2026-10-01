@@ -219,3 +219,39 @@ func TestViewFooterPinnedOnTagsTab(t *testing.T) {
 	}
 	footerAtBottom(t, m, got)
 }
+
+func TestViewPRDiffSplitFitsTerminal(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 80
+	m.height = 24
+	m.tab = tabPRs
+	m.state = stateDetail
+	m.username = "nospor"
+	m.detailPR = &gh.PullInfo{Number: 1, Title: "Add diffs", State: "open", Head: "feat", Base: "main"}
+	m.prDiffPanelOpen = true
+	m.prDiffFiles = []*gh.DiffFile{{
+		NewPath: "internal/tui/view.go",
+		Added:   1,
+		Deleted: 1,
+		Lines: []gh.DiffLine{
+			{Type: "hunk", Content: "@@ -1,2 +1,2 @@"},
+			{Type: "removed", Content: "-old"},
+			{Type: "added", Content: "+new"},
+		},
+	}}
+	m.rebuildDetail()
+
+	got := m.View()
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if len(lines) > m.height {
+		t.Fatalf("PR diff split: rendered %d lines, height %d", len(lines), m.height)
+	}
+	if !strings.Contains(got, "Changes") {
+		t.Fatal("expected diff panel in view")
+	}
+}
