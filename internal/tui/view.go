@@ -112,6 +112,10 @@ func (m Model) hints() string {
 		return joinHints([][2]string{{"ctrl+s", "post"}, {"esc", "cancel"}})
 	case stateCreate:
 		return joinHints([][2]string{{"tab", "next field"}, {"ctrl+s", "save"}, {"esc", "cancel"}})
+	case stateDispatchSelect:
+		return joinHints([][2]string{{"j/k", "move"}, {"enter", "select"}, {"esc", "back"}})
+	case stateDispatch:
+		return joinHints([][2]string{{"tab", "next field"}, {"j/k", "choice"}, {"ctrl+s", "run"}, {"esc", "cancel"}})
 	case stateJobLog:
 		return joinHints([][2]string{{"j/k", "scroll"}, {"g/G", "top/bottom"}, {"esc", "back"}})
 	case stateDetail:
@@ -136,7 +140,7 @@ func (m Model) hints() string {
 		}
 		if m.detailRun != nil {
 			return joinHints([][2]string{
-				{"j/k", "job"}, {"enter", "log"}, {"R", "rerun"}, {"c", "cancel"},
+				{"j/k", "job"}, {"enter", "log"}, {"w", "run"}, {"R", "rerun"}, {"c", "cancel"},
 				{"o", "open"}, {"y", "yank"}, {"esc", "back"},
 			})
 		}
@@ -166,7 +170,7 @@ func (m Model) hints() string {
 		case tabIssues:
 			h = append([][2]string{{"s", "state"}, {"c", "create"}, {"b", "branch"}, {"x", "close"}, {"O", "reopen"}}, h...)
 		case tabActions:
-			h = append([][2]string{{"R", "rerun"}, {"c", "cancel"}}, h...)
+			h = append([][2]string{{"s", "workflow"}, {"w", "run"}, {"R", "rerun"}, {"c", "cancel"}}, h...)
 		case tabRepos:
 			return joinHints([][2]string{
 				{"type", "search"}, {"up/down", "move"}, {"enter", "use repo"},
@@ -203,6 +207,10 @@ func (m Model) viewBody() string {
 		return m.viewEditTag()
 	case stateCreateIssueBranch:
 		return m.viewCreateIssueBranch()
+	case stateDispatchSelect:
+		return m.viewDispatchSelect()
+	case stateDispatch:
+		return m.viewDispatch()
 	case stateCompareBranchSelect:
 		return m.viewCompareBranchSelect()
 	case stateJobLog:
@@ -275,7 +283,7 @@ func (m Model) placeDialog(title, note, body string) string {
 func (m Model) dialogBackground() string {
 	bg := ""
 	switch m.state {
-	case stateConfirm, stateComment, stateCreate, stateServerSelect, stateLinkSelect:
+	case stateConfirm, stateComment, stateCreate, stateServerSelect, stateLinkSelect, stateDispatchSelect, stateDispatch:
 		bg = m.viewBodyForState(m.returnState)
 	}
 	return m.padBodyHeight(bg)
@@ -374,19 +382,20 @@ func (m Model) viewList() string {
 }
 
 const (
-	repoVisColW    = 9
-	repoNameColW   = 42
-	prIDColW       = 6
-	prTitleColMax  = 55
-	prStateColW    = 16
-	prAuthorColW   = 14
-	prUpdatedColW  = 16
-	runIDColW      = 12
-	runRefColMax   = 22
-	runStatusColW  = 16
-	runActorColW   = 14
-	runSourceColW  = 12
-	runUpdatedColW = 16
+	repoVisColW     = 9
+	repoNameColW    = 42
+	prIDColW        = 6
+	prTitleColMax   = 55
+	prStateColW     = 16
+	prAuthorColW    = 14
+	prUpdatedColW   = 16
+	runIDColW       = 12
+	runWorkflowColW = 14
+	runRefColMax    = 22
+	runStatusColW   = 16
+	runActorColW    = 14
+	runSourceColW   = 12
+	runUpdatedColW  = 16
 )
 
 func (m Model) viewListCore() string {
@@ -478,8 +487,9 @@ func prTitleWidth(rowWidth int) int {
 func (m Model) actionsListHeader(width int) string {
 	refW := runRefWidth(width)
 	header := lipgloss.NewStyle().Foreground(colorMuted).PaddingLeft(2).Render(
-		fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
+		fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
 			runIDColW, "ID",
+			runWorkflowColW, "Workflow",
 			refW, "Ref",
 			runStatusColW, "Status",
 			runActorColW, "Triggered by",
@@ -492,8 +502,8 @@ func (m Model) actionsListHeader(width int) string {
 
 func runRefWidth(rowWidth int) int {
 	const mark = 2
-	const gaps = 10 // 5 column gaps of "  "
-	fixed := mark + runIDColW + gaps + runStatusColW + runActorColW + runSourceColW + runUpdatedColW
+	const gaps = 12 // 6 column gaps of "  "
+	fixed := mark + runIDColW + runWorkflowColW + gaps + runStatusColW + runActorColW + runSourceColW + runUpdatedColW
 	w := rowWidth - fixed
 	if w > runRefColMax {
 		return runRefColMax
@@ -515,7 +525,11 @@ func (m Model) listTitle() string {
 	case tabIssues:
 		return fmt.Sprintf("Issues · %s · page %d", m.issueState, m.issuePage)
 	case tabActions:
-		return fmt.Sprintf("Actions · page %d", m.runPage)
+		name := "all"
+		if wf := m.filteredWorkflow(); wf != nil {
+			name = wf.Name
+		}
+		return fmt.Sprintf("Actions · %s · page %d", name, m.runPage)
 	default:
 		extra := ""
 		if m.repoHasNext || m.repoPage > 1 {
@@ -621,12 +635,13 @@ func (m Model) renderIssueRow(issue *gh.IssueInfo, selected bool, width int) str
 func (m Model) renderRunRow(run *gh.RunInfo, selected bool, width int) string {
 	refW := runRefWidth(width)
 	id := padColumn(fit(fmt.Sprintf("#%d", run.ID), runIDColW), runIDColW)
+	workflow := padColumn(fit(run.Name, runWorkflowColW), runWorkflowColW)
 	ref := padColumn(fit(run.Branch, refW), refW)
 	status := padStatusBadge(statusBadge(run.Badge()), runStatusColW)
 	actor := padColumn(fit(run.Actor, runActorColW), runActorColW)
 	source := padColumn(fit(run.Event, runSourceColW), runSourceColW)
 	updated := dimStyle.Render(tableTime(run.UpdatedAt))
-	line := id + "  " + ref + "  " + status + "  " + actor + "  " + source + "  " + updated
+	line := id + "  " + workflow + "  " + ref + "  " + status + "  " + actor + "  " + source + "  " + updated
 	st := normalItemStyle
 	mark := "  "
 	if selected {

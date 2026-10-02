@@ -65,8 +65,9 @@ func (m Model) cmdRuns() tea.Cmd {
 	client := m.client
 	full := m.repoFull()
 	page := m.runPage
+	workflowID := m.runWorkflowID
 	return func() tea.Msg {
-		items, hasNext, err := client.ListRuns(full, page)
+		items, hasNext, err := client.ListRuns(full, page, workflowID)
 		if err != nil {
 			return errMsg{err}
 		}

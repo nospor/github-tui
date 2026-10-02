@@ -336,8 +336,8 @@ func TestActionsListTableLayout(t *testing.T) {
 
 	got := plain(m.View())
 	for _, want := range []string{
-		"ID", "Ref", "Status", "Triggered by", "Source", "Updated",
-		"#38459", "#38318", "develop", "carmermn", "simonl",
+		"ID", "Workflow", "Ref", "Status", "Triggered by", "Source", "Updated",
+		"#38459", "#38318", "CI", "develop", "carmermn", "simonl",
 		"push", "pull_request", "2026-10-02 07:25", "2026-09-29 15:07",
 	} {
 		if !strings.Contains(got, want) {

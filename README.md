@@ -10,7 +10,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 - 🌿 **Branches** — list, delete, open a branch to browse commits with diff pane (`Tab`), compare two branches (`C`), create a pull request from a branch (`c`)
 - 🏷️ **Tags** — list, create (name, ref branch, message), edit GitHub release notes (`e` in tag detail), delete, browse commits with diff pane
 - 🐛 **Issues** — list, filter, read, comment, create, close, reopen, vote up/down (`+` / `-`), and create a git branch for an issue (`b`)
-- 🚀 **Actions** — list workflow runs, inspect jobs, read job logs, re-run, and cancel
+- 🚀 **Actions** — list workflow runs by workflow, inspect jobs, read job logs, run (`workflow_dispatch`), re-run, and cancel
 - 📁 **Repositories** — browse repos the token can access, search the list as you type, and switch the working repo
 - 🔌 **Servers** — github.com and GitHub Enterprise, selected from config
 - 🧠 **Auto-detect** — picks the server and `owner/repo` from the current directory's git remote
@@ -82,8 +82,9 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 | `1`–`6` / `Tab` | Pull requests, Branches, Tags, Actions, Issues, Repos |
 | `j` / `k` | Move |
 | `Enter` | Open the item, or select the highlighted repository |
-| `s` | Cycle open / closed / all |
+| `s` | Cycle open / closed / all. On Actions, cycle workflows |
 | `c` | Create a pull request or issue. On Branches, open create PR with head prefilled. On Tags, create a tag. On Actions, cancel the run |
+| `w` | On Actions, run a workflow (`workflow_dispatch`) |
 | `C` | Comment on the open pull request or issue. On Branches (list), compare with another branch |
 | `Tab` | Next tab on lists. In a pull request, branch, or tag detail: toggle the diff pane |
 | `d` | On Branches or Tags (list), delete the selected branch or tag |
@@ -100,7 +101,7 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 | `S` | Switch server |
 | `q` | Quit |
 
-Create forms use `Tab` to move between fields and `Ctrl+S` to save. In a pull request, **Head** is the branch name, or `user:branch` when the branch is on a fork. **Base** starts as the repository's default branch.
+Create forms use `Tab` to move between fields and `Ctrl+S` to save. In a pull request, **Head** is the branch name, or `user:branch` when the branch is on a fork. **Base** starts as the repository's default branch. On Actions, `w` opens **Run workflow** for a `workflow_dispatch` workflow: pick the branch and inputs, then `Ctrl+S` to start it.
 
 ## License
 

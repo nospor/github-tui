@@ -56,6 +56,8 @@ const (
 	stateCreateTag
 	stateEditTag
 	stateCreateIssueBranch
+	stateDispatchSelect
+	stateDispatch
 )
 
 type (
@@ -184,11 +186,23 @@ type Model struct {
 	issueCursor  int
 	issueOffset  int
 
-	runPage    int
-	runHasNext bool
-	runs       []*gh.RunInfo
-	runCursor  int
-	runOffset  int
+	runPage           int
+	runHasNext        bool
+	runs              []*gh.RunInfo
+	runCursor         int
+	runOffset         int
+	workflows         []*gh.WorkflowInfo
+	runWorkflowID     int64
+	pendingDispatch   bool
+	pendingDispatchID int64
+
+	dispatchWorkflow     *gh.WorkflowInfo
+	dispatchInputs       []*gh.DispatchInput
+	dispatchTexts        []textinput.Model
+	dispatchChoices      []int
+	dispatchField        int
+	dispatchCursor       int
+	dispatchBranchCursor int
 
 	repoPage    int
 	repoHasNext bool
@@ -426,16 +440,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampList()
 		}
 		return m, nil
+	case workflowsMsg:
+		m = m.finish()
+		m.workflows = msg.items
+		if m.workflows == nil {
+			m.workflows = []*gh.WorkflowInfo{}
+		}
+		m.clampWorkflowFilter()
+		if m.pendingDispatch {
+			m.pendingDispatch = false
+			return m.openDispatchChooser()
+		}
+		return m, nil
+	case dispatchSpecMsg:
+		m = m.finish()
+		if !msg.ok {
+			m.setStatus("This workflow cannot be run manually")
+			return m, m.scheduleClear()
+		}
+		return m.openDispatchForm(msg.workflow, msg.inputs)
 	case branchesLoadedMsg:
 		m = m.finish()
 		m.branches = msg.branches
 		if m.tab == tabBranches {
 			m.clampList()
 		}
-		if m.state == stateCreateTag && m.repo != nil {
+		if m.repo != nil {
 			for i, b := range m.branches {
 				if b == m.repo.DefaultBranch {
-					m.createTagBranchCursor = i
+					if m.state == stateCreateTag {
+						m.createTagBranchCursor = i
+					}
+					if m.state == stateDispatch {
+						m.dispatchBranchCursor = i
+					}
 					break
 				}
 			}
@@ -601,7 +639,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.repo = nil
 		m.username = ""
 		m.prs, m.issues, m.runs, m.repos = nil, nil, nil, nil
-		m.branches, m.tags = nil, nil
+		m.branches, m.tags, m.workflows = nil, nil, nil
+		m.runWorkflowID = 0
+		m.pendingDispatch = false
+		m.pendingDispatchID = 0
 		m.clearAllDetail()
 		m.tab = tabRepos
 		m.state = stateMain
@@ -638,7 +679,7 @@ func commentNote(truncated bool, commentErr string) string {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	onRepoSearch := m.state == stateMain && m.tab == tabRepos
-	if m.loading && m.state != stateComment && m.state != stateCreate && !onRepoSearch {
+	if m.loading && m.state != stateComment && m.state != stateCreate && m.state != stateDispatch && m.state != stateDispatchSelect && !onRepoSearch {
 		if msg.String() == "q" {
 			return m, tea.Quit
 		}
@@ -669,6 +710,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleEditTagKey(msg)
 	case stateCreateIssueBranch:
 		return m.handleCreateIssueBranchKey(msg)
+	case stateDispatchSelect:
+		return m.handleDispatchSelect(msg.String())
+	case stateDispatch:
+		return m.handleDispatch(msg)
 	case stateCompareBranchSelect:
 		return m.handleCompareBranchSelectKey(msg.String())
 	case stateJobLog:
@@ -734,6 +779,8 @@ func (m Model) handleMain(key string) (tea.Model, tea.Cmd) {
 		return m.prevPage()
 	case "s":
 		return m.cycleState()
+	case "w":
+		return m.startRunWorkflow()
 	case "c":
 		if m.tab == tabBranches || m.tab == tabTags {
 			return m.handleMainBranchTag("c")
@@ -850,7 +897,10 @@ func (m Model) useSelectedRepo() (tea.Model, tea.Cmd) {
 	m.repo = repo
 	m.repoInput.Blur()
 	m.prs, m.issues, m.runs = nil, nil, nil
-	m.branches, m.tags = nil, nil
+	m.branches, m.tags, m.workflows = nil, nil, nil
+	m.runWorkflowID = 0
+	m.pendingDispatch = false
+	m.pendingDispatchID = 0
 	m.clearAllDetail()
 	m.prPage, m.issuePage, m.runPage = 1, 1, 1
 	m.tab = tabPRs
@@ -1010,6 +1060,8 @@ func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
 		return m.cancelDetail()
 	case "R":
 		return m.rerunDetail()
+	case "w":
+		return m.startRunWorkflowFromDetail()
 	case "o":
 		return m.openDetailLinks()
 	case "y":
@@ -1230,6 +1282,9 @@ func (m Model) layoutInputs() {
 	m.baseInput.Width = w
 	m.repoInput.Width = repoW
 	m.bodyInput.SetWidth(w)
+	for i := range m.dispatchTexts {
+		m.dispatchTexts[i].Width = w
+	}
 	h := m.height / 4
 	if h < 5 {
 		h = 5
@@ -1300,7 +1355,7 @@ func (m Model) needsLoad() bool {
 	case tabIssues:
 		return m.issues == nil
 	case tabActions:
-		return m.runs == nil
+		return m.runs == nil || m.workflows == nil
 	default:
 		return false
 	}
@@ -1332,7 +1387,7 @@ func (m Model) reloadCurrent() tea.Cmd {
 		if m.repo == nil {
 			return nil
 		}
-		return m.cmdRuns()
+		return tea.Batch(m.cmdRuns(), m.cmdWorkflows())
 	case tabRepos:
 		return m.cmdRepos()
 	default:
@@ -1523,6 +1578,18 @@ func (m Model) cycleState() (tea.Model, tea.Cmd) {
 		m.issuePage, m.issueCursor, m.issueOffset = 1, 0, 0
 		m.issues = nil
 		return m.track(m.cmdIssues())
+	case tabActions:
+		if m.workflows == nil {
+			return m.track(m.cmdWorkflows())
+		}
+		if len(m.workflows) == 0 {
+			m.setStatus("This repository has no workflows")
+			return m, m.scheduleClear()
+		}
+		m.cycleWorkflowFilter()
+		m.runPage, m.runCursor, m.runOffset = 1, 0, 0
+		m.runs = nil
+		return m.track(m.cmdRuns())
 	default:
 		return m, nil
 	}
@@ -1575,7 +1642,10 @@ func (m Model) openSelected() (tea.Model, tea.Cmd) {
 		m.repo = repo
 		m.repoInput.Blur()
 		m.prs, m.issues, m.runs = nil, nil, nil
-		m.branches, m.tags = nil, nil
+		m.branches, m.tags, m.workflows = nil, nil, nil
+		m.runWorkflowID = 0
+		m.pendingDispatch = false
+		m.pendingDispatchID = 0
 		m.clearAllDetail()
 		m.prPage, m.issuePage, m.runPage = 1, 1, 1
 		m.tab = tabPRs

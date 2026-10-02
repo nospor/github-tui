@@ -77,6 +77,7 @@ type CommentInfo struct {
 // RunInfo is a GitHub Actions workflow run.
 type RunInfo struct {
 	ID         int64
+	WorkflowID int64
 	Name       string
 	Status     string
 	Conclusion string
@@ -473,7 +474,8 @@ func (c *Client) Comment(full string, number int, body string) error {
 }
 
 // ListRuns lists Actions workflow runs, newest first.
-func (c *Client) ListRuns(full string, page int) ([]*RunInfo, bool, error) {
+// If workflowID is non-zero, only runs for that workflow are returned.
+func (c *Client) ListRuns(full string, page int, workflowID int64) ([]*RunInfo, bool, error) {
 	owner, name, err := SplitRepo(full)
 	if err != nil {
 		return nil, false, err
@@ -484,7 +486,15 @@ func (c *Client) ListRuns(full string, page int) ([]*RunInfo, bool, error) {
 	opts := &gh.ListWorkflowRunsOptions{
 		ListOptions: gh.ListOptions{Page: page, PerPage: pageSize},
 	}
-	result, resp, err := c.raw.Actions.ListRepositoryWorkflowRuns(context.Background(), owner, name, opts)
+	var (
+		result *gh.WorkflowRuns
+		resp   *gh.Response
+	)
+	if workflowID > 0 {
+		result, resp, err = c.raw.Actions.ListWorkflowRunsByID(context.Background(), owner, name, workflowID, opts)
+	} else {
+		result, resp, err = c.raw.Actions.ListRepositoryWorkflowRuns(context.Background(), owner, name, opts)
+	}
 	if err != nil {
 		return nil, false, apiErr("list workflow runs", err)
 	}
@@ -766,6 +776,7 @@ func mapRun(run *gh.WorkflowRun) *RunInfo {
 	}
 	return &RunInfo{
 		ID:         run.GetID(),
+		WorkflowID: run.GetWorkflowID(),
 		Name:       name,
 		Status:     run.GetStatus(),
 		Conclusion: run.GetConclusion(),
