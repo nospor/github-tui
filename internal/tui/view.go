@@ -666,7 +666,7 @@ func (m Model) renderRepoRow(repo *gh.RepoInfo, selected bool, width int) string
 		st = selectedStyle
 		mark = "▶ "
 	}
-	return st.Width(width - 2).Render(mark + line)
+	return st.Width(width).Render(mark + line)
 }
 
 func (m Model) renderItem(badge, rest string, selected bool, width int) string {

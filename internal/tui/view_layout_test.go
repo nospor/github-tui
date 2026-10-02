@@ -166,6 +166,56 @@ func TestViewLineCountReposTabWithStatus(t *testing.T) {
 	}
 }
 
+func TestRepoRowLongDescriptionDoesNotWrap(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	m := New(cfg, 0, nil, nil, "", "", 0)
+	m.width = 120
+	m.height = 24
+	m.tab = tabRepos
+	m.username = "nospor"
+	m.repos = []*gh.RepoInfo{
+		{
+			FullName:    "nospor/noodle",
+			Description: "A lightweight, fully keyboard-operated feed reader built in Go with Bubble Tea. Noodle brings a responsive and elegant TUI, complete with vim-style navigation",
+		},
+		{
+			FullName:    "nospor/dbx",
+			Description: "Fast multi-OS TUI client",
+		},
+	}
+	m.layoutInputs()
+
+	rowWidth := max(20, m.width-2)
+	row := m.renderRepoRow(m.repos[0], false, rowWidth)
+	if strings.Contains(row, "\n") {
+		t.Fatalf("long description wrapped onto a second line:\n%s", row)
+	}
+	if w := lipgloss.Width(row); w > rowWidth {
+		t.Fatalf("repo row width %d exceeds %d", w, rowWidth)
+	}
+
+	got := plain(m.View())
+	var dbxLine string
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "nospor/dbx") {
+			dbxLine = line
+			break
+		}
+	}
+	if dbxLine == "" {
+		t.Fatal("expected dbx row in view")
+	}
+	if strings.Contains(dbxLine, "complete") || strings.Contains(dbxLine, "comple") {
+		t.Fatalf("previous description leaked into next repo row: %q", dbxLine)
+	}
+	if !strings.Contains(dbxLine, "public") {
+		t.Fatalf("expected visibility on dbx row, got %q", dbxLine)
+	}
+}
+
 func TestViewLineCountWithPRs(t *testing.T) {
 	cfg := &config.Config{Servers: []config.Server{{
 		Name: "github.com",
