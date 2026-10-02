@@ -433,6 +433,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case branchCommitsLoadedMsg:
 		m = m.finish()
+		m.clearItemDetail()
 		m.branchCommits = msg.commits
 		m.branchDetailName = msg.branch
 		m.branchCommitCursor = 0
@@ -440,6 +441,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case branchCompareLoadedMsg:
 		m = m.finish()
+		m.clearItemDetail()
 		m.branchCompare = msg.compare
 		m.branchCompareTarget = msg.targetBranch
 		m.branchDetailName = msg.sourceBranch
@@ -494,6 +496,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tagCommitsLoadedMsg:
 		m = m.finish()
+		m.clearItemDetail()
 		m.tagCommits = msg.commits
 		m.tagDetailName = msg.tag
 		m.tagCommitCursor = 0
@@ -502,6 +505,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case pullDetailMsg:
 		m = m.finish()
+		m.clearRefDetail()
 		m.detailPR = msg.item
 		m.detailIssue = nil
 		m.detailRun = nil
@@ -521,6 +525,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case issueDetailMsg:
 		m = m.finish()
+		m.clearRefDetail()
 		m.detailIssue = msg.item
 		m.detailPR = nil
 		m.detailRun = nil
@@ -533,6 +538,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case runDetailMsg:
 		m = m.finish()
+		m.clearRefDetail()
 		m.detailRun = msg.item
 		m.jobs = msg.jobs
 		m.detailPR = nil
@@ -576,6 +582,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.username = ""
 		m.prs, m.issues, m.runs, m.repos = nil, nil, nil, nil
 		m.branches, m.tags = nil, nil
+		m.clearAllDetail()
 		m.tab = tabRepos
 		m.state = stateMain
 		m.repoPage = 1
@@ -744,6 +751,7 @@ func (m *Model) blurRepoSearch() {
 }
 
 func (m Model) afterTabChange() (tea.Model, tea.Cmd) {
+	m.clearAllDetail()
 	var cmds []tea.Cmd
 	if m.tab == tabRepos {
 		cmds = append(cmds, m.repoInput.Focus())
@@ -823,6 +831,7 @@ func (m Model) useSelectedRepo() (tea.Model, tea.Cmd) {
 	m.repoInput.Blur()
 	m.prs, m.issues, m.runs = nil, nil, nil
 	m.branches, m.tags = nil, nil
+	m.clearAllDetail()
 	m.prPage, m.issuePage, m.runPage = 1, 1, 1
 	m.tab = tabPRs
 	m.state = stateMain
@@ -835,8 +844,7 @@ func (m Model) jumpTab(tab tabID) (tea.Model, tea.Cmd) {
 	}
 	m.tab = tab
 	m.state = stateMain
-	m.clearRefDetail()
-	m.clearPRDiff()
+	m.clearAllDetail()
 	m.clampList()
 	var cmds []tea.Cmd
 	if tab == tabRepos {
@@ -906,8 +914,7 @@ func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case "esc":
 		m.state = stateMain
-		m.clearRefDetail()
-		m.clearPRDiff()
+		m.clearAllDetail()
 		return m, nil
 	case "tab":
 		if m.detailPR != nil {
@@ -1535,6 +1542,7 @@ func (m Model) openSelected() (tea.Model, tea.Cmd) {
 		m.repoInput.Blur()
 		m.prs, m.issues, m.runs = nil, nil, nil
 		m.branches, m.tags = nil, nil
+		m.clearAllDetail()
 		m.prPage, m.issuePage, m.runPage = 1, 1, 1
 		m.tab = tabPRs
 		return m.track(m.cmdPulls())

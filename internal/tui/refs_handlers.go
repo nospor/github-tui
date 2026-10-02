@@ -11,6 +11,20 @@ func (m Model) inRefDetail() bool {
 		(m.tab == tabBranches || m.tab == tabTags)
 }
 
+func (m *Model) clearItemDetail() {
+	m.detailPR = nil
+	m.detailIssue = nil
+	m.detailRun = nil
+	m.comments = nil
+	m.commentNote = ""
+	m.jobs = nil
+	m.jobCursor = 0
+	m.jobOffset = 0
+	m.detailScroll = 0
+	m.detailLines = nil
+	m.clearPRDiff()
+}
+
 func (m *Model) clearRefDetail() {
 	m.branchDetailName = ""
 	m.branchCommits = nil
@@ -35,6 +49,11 @@ func (m *Model) clearRefDetail() {
 	m.tagCommitDiffPanelOpen = false
 	m.tagCommitDiffLoading = false
 	m.tagCommitDiffSHA = ""
+}
+
+func (m *Model) clearAllDetail() {
+	m.clearItemDetail()
+	m.clearRefDetail()
 }
 
 func (m Model) handleMainBranchTag(key string) (tea.Model, tea.Cmd) {
@@ -86,6 +105,7 @@ func (m Model) openBranchOrTagDetail() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		branch := m.branches[m.branchCursor]
+		m.clearItemDetail()
 		m.branchDetailView = branchViewCommits
 		m.branchDetailName = branch
 		m.branchCommits = nil
@@ -98,6 +118,7 @@ func (m Model) openBranchOrTagDetail() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		tag := m.tags[m.tagCursor]
+		m.clearItemDetail()
 		m.tagDetailName = tag.Name
 		m.tagCommits = nil
 		m.tagCommitCursor = 0
@@ -119,7 +140,7 @@ func (m Model) handleRefDetail(key string) (tea.Model, tea.Cmd) {
 		} else {
 			m.state = stateMain
 		}
-		m.clearRefDetail()
+		m.clearAllDetail()
 		return m, nil
 	}
 	switch m.tab {

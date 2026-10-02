@@ -129,6 +129,7 @@ func (m Model) handleCompareBranchSelectKey(key string) (tea.Model, tea.Cmd) {
 		if len(list) > 0 && m.compareSelectCursor < len(list) {
 			targetBranch := list[m.compareSelectCursor]
 			sourceBranch := m.branches[m.branchCursor]
+			m.clearItemDetail()
 			m.returnState = stateMain
 			m.branchDetailView = branchViewCompare
 			return m.track(m.cmdCompareBranches(targetBranch, sourceBranch))
