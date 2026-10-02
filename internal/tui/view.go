@@ -707,51 +707,133 @@ func (m *Model) rebuildDetail() {
 		leftW, _ := m.splitPaneWidths()
 		width = max(20, leftW-2)
 	}
-	var lines []string
-	add := func(s string) { lines = append(lines, s) }
 	switch {
 	case m.detailPR != nil:
-		pr := m.detailPR
-		add(pullBadge(pr) + "  " + boldStyle.Render(fmt.Sprintf("#%d  %s", pr.Number, pr.Title)))
-		add(dimStyle.Render(fmt.Sprintf("%s → %s   %s   %s", pr.Head, pr.Base, pr.Author, shortTime(pr.UpdatedAt))))
-		add("")
-		lines = append(lines, wrapStyled(pr.Body, width)...)
+		m.detailLines = m.prDetailLines(width)
 	case m.detailIssue != nil:
-		issue := m.detailIssue
-		add(statusBadge(issue.State) + "  " + boldStyle.Render(fmt.Sprintf("#%d  %s", issue.Number, issue.Title)))
-		add(dimStyle.Render(fmt.Sprintf("%s   %s", issue.Author, shortTime(issue.UpdatedAt))))
-		add("")
-		lines = append(lines, wrapStyled(issue.Body, width)...)
+		m.detailLines = m.issueDetailLines(width)
 	default:
 		m.detailLines = nil
 		return
 	}
+	m.clampDetail()
+}
+
+func (m Model) prDetailLines(width int) []string {
+	pr := m.detailPR
+	var lines []string
+	add := func(s string) { lines = append(lines, s) }
+	add(pullBadge(pr) + "  " + boldStyle.Render(fmt.Sprintf("#%d  %s", pr.Number, pr.Title)))
+	add(dimStyle.Render(fmt.Sprintf("%s → %s   %s   %s", pr.Head, pr.Base, pr.Author, shortTime(pr.UpdatedAt))))
+	add("")
+	lines = append(lines, wrapStyled(pr.Body, width)...)
+	return m.appendComments(lines, width)
+}
+
+func (m Model) issueDetailLines(width int) []string {
+	issue := m.detailIssue
+	inner := width - 2
+	if inner < 8 {
+		inner = 8
+	}
+	pad := func(s string) string { return "  " + s }
+	divider := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", inner))
+
+	title := boldStyle.Render(fmt.Sprintf("#%d  %s", issue.Number, issue.Title))
+	meta := lipgloss.JoinHorizontal(lipgloss.Center,
+		statusBadge(issue.State),
+		"  ",
+		dimStyle.Render("Author: "),
+		accentStyle.Render(issue.Author),
+	)
+	dates := dimStyle.Render("Updated: " + tableTime(issue.UpdatedAt) + "  Created: " + tableTime(issue.CreatedAt))
+
+	var lines []string
+	lines = append(lines, "", pad(title), pad(meta), pad(dates), "", pad(divider), "")
+	if strings.TrimSpace(issue.Body) == "" {
+		lines = append(lines, pad(dimStyle.Italic(true).Render("No description provided.")))
+	} else {
+		for _, line := range wrapStyled(issue.Body, inner) {
+			lines = append(lines, pad(line))
+		}
+	}
+	comments := issue.Comments
+	if comments == 0 {
+		for _, c := range m.comments {
+			if !c.System {
+				comments++
+			}
+		}
+	}
+	lines = append(lines,
+		"",
+		pad(dimStyle.Render(fmt.Sprintf("👍 %d  👎 %d  💬 %d", issue.PlusOne, issue.MinusOne, comments))),
+		"",
+		pad(infoStyle.Render("🔗 "+issue.HTMLURL)),
+		"",
+		pad(subtitleStyle.Render("💬 Discussions & Comments")),
+		pad(divider),
+	)
+	if m.commentNote != "" {
+		lines = append(lines, pad(warningStyle.Render(m.commentNote)))
+	}
+	if len(m.comments) == 0 {
+		lines = append(lines, pad(dimStyle.Italic(true).Render("No comments yet.")))
+		return lines
+	}
+
+	sawUser := false
+	for _, c := range m.comments {
+		if c.System {
+			note := "• " + styleSystemNote(c.Body) + " " + dimStyle.Render("("+tableTime(c.UpdatedAt)+")")
+			lines = append(lines, pad(note), pad(divider))
+			continue
+		}
+		if !sawUser {
+			lines = append(lines, pad(accentStyle.Render("General Thread")))
+			sawUser = true
+		}
+		author := boldStyle.Render("@" + c.Author)
+		when := dimStyle.Render(" on " + tableTime(c.UpdatedAt))
+		lines = append(lines, pad(author+when))
+		bodyWidth := inner - 2
+		if bodyWidth < 8 {
+			bodyWidth = 8
+		}
+		if strings.TrimSpace(c.Body) == "" {
+			lines = append(lines, pad("  "+dimStyle.Italic(true).Render("(empty comment)")))
+		} else {
+			for _, line := range wrapStyled(c.Body, bodyWidth) {
+				lines = append(lines, pad("  "+line))
+			}
+		}
+		lines = append(lines, pad(divider))
+	}
+	return lines
+}
+
+func (m Model) appendComments(lines []string, width int) []string {
 	if m.commentNote != "" {
 		lines = append(lines, "", warningStyle.Render(m.commentNote))
 	}
 	lines = append(lines, "", subtitleStyle.Render("Comments"))
 	if len(m.comments) == 0 {
-		lines = append(lines, dimStyle.Render("No comments."))
+		return append(lines, dimStyle.Render("No comments."))
 	}
 	for _, c := range m.comments {
-		lines = append(lines, "")
-		lines = append(lines, accentStyle.Render(c.Author)+"  "+dimStyle.Render(shortTime(c.UpdatedAt)))
+		lines = append(lines, "", accentStyle.Render(c.Author)+"  "+dimStyle.Render(shortTime(c.UpdatedAt)))
 		lines = append(lines, wrapStyled(c.Body, width)...)
 	}
-	m.detailLines = lines
-	m.clampDetail()
+	return lines
 }
 
 func wrapStyled(text string, width int) []string {
 	if strings.TrimSpace(text) == "" {
-		return []string{dimStyle.Render("(no description)")}
+		return []string{dimStyle.Italic(true).Render("No description provided.")}
 	}
-	raw := wrapBlock(text, width)
-	out := make([]string, len(raw))
-	for i, line := range raw {
-		out[i] = line
-	}
-	return out
+	styled := markdownToStyled(text)
+	wrapped := lipgloss.NewStyle().Width(width).Render(styled)
+	return strings.Split(wrapped, "\n")
 }
 
 func (m Model) viewRun() string {

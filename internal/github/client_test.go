@@ -1,6 +1,10 @@
 package github
 
-import "testing"
+import (
+	"testing"
+
+	gh "github.com/google/go-github/v68/github"
+)
 
 func TestSplitRepo(t *testing.T) {
 	owner, name, err := SplitRepo("cli/cli")
@@ -29,5 +33,34 @@ func TestRunBadge(t *testing.T) {
 	}
 	if got := (&RunInfo{Status: "completed", Conclusion: "failure"}).Badge(); got != "failed" {
 		t.Fatalf("got %s", got)
+	}
+}
+
+func TestMapTimeline(t *testing.T) {
+	from, to := "old title", "new title"
+	ev := &gh.Timeline{
+		Event:  gh.Ptr("renamed"),
+		Actor:  &gh.User{Login: gh.Ptr("robertn")},
+		Rename: &gh.Rename{From: &from, To: &to},
+	}
+	got := mapTimeline(ev)
+	if got == nil || !got.System || got.Author != "robertn" {
+		t.Fatalf("renamed: %#v", got)
+	}
+	if got.Body != "changed title from **old title** to **new title**" {
+		t.Fatalf("body %q", got.Body)
+	}
+
+	comment := mapTimeline(&gh.Timeline{
+		Event: gh.Ptr("commented"),
+		User:  &gh.User{Login: gh.Ptr("alice")},
+		Body:  gh.Ptr("hello **there**"),
+	})
+	if comment == nil || comment.System || comment.Author != "alice" || comment.Body != "hello **there**" {
+		t.Fatalf("comment: %#v", comment)
+	}
+
+	if mapTimeline(&gh.Timeline{Event: gh.Ptr("subscribed")}) != nil {
+		t.Fatal("expected noisy events to be skipped")
 	}
 }

@@ -445,3 +445,58 @@ func TestViewPRDiffSplitFitsTerminal(t *testing.T) {
 		t.Fatal("expected diff panel in view")
 	}
 }
+
+func TestIssueDetailLayout(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "org/app"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 120
+	m.height = 32
+	m.tab = tabIssues
+	m.state = stateDetail
+	m.username = "robertn"
+	m.detailIssue = &gh.IssueInfo{
+		Number:    1,
+		Title:     "test issue kkkk",
+		State:     "closed",
+		Author:    "robertn",
+		Body:      "test **ddd**",
+		HTMLURL:   "https://github.com/org/app/issues/1",
+		Comments:  1,
+		CreatedAt: time.Date(2026, 7, 20, 8, 12, 0, 0, time.Local),
+		UpdatedAt: time.Date(2026, 7, 20, 9, 26, 0, 0, time.Local),
+	}
+	m.comments = []*gh.CommentInfo{{
+		Author:    "robertn",
+		Body:      "test comment",
+		UpdatedAt: time.Date(2026, 7, 20, 8, 13, 0, 0, time.Local),
+	}, {
+		Author:    "robertn",
+		Body:      "changed title from **test issue** to **test issue kkkk**",
+		System:    true,
+		UpdatedAt: time.Date(2026, 7, 20, 8, 46, 0, 0, time.Local),
+	}}
+	m.rebuildDetail()
+
+	got := plain(m.View())
+	for _, want := range []string{
+		"#1", "test issue kkkk", "Author:", "robertn", "closed",
+		"Updated: 2026-07-20 09:26", "Created: 2026-07-20 08:12",
+		"ddd", "Discussions & Comments", "General Thread",
+		"@robertn", "test comment", "changed title from",
+		"https://github.com/org/app/issues/1",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("issue detail missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "**ddd**") {
+		t.Fatal("expected markdown bold markers to be parsed")
+	}
+	if strings.Contains(got, "**test issue**") {
+		t.Fatal("expected system note markdown to be parsed")
+	}
+}

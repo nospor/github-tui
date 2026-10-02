@@ -59,13 +59,18 @@ type IssueInfo struct {
 	Author    string
 	Body      string
 	HTMLURL   string
+	Comments  int
+	PlusOne   int
+	MinusOne  int
+	CreatedAt time.Time
 	UpdatedAt time.Time
 }
 
-// CommentInfo is an issue or pull request conversation comment.
+// CommentInfo is an issue or pull request conversation comment or timeline event.
 type CommentInfo struct {
 	Author    string
 	Body      string
+	System    bool
 	UpdatedAt time.Time
 }
 
@@ -371,7 +376,7 @@ func (c *Client) GetIssue(full string, number int) (*IssueInfo, []*CommentInfo, 
 	if issue.IsPullRequest() {
 		return nil, nil, false, fmt.Errorf("#%d is a pull request", number)
 	}
-	comments, truncated, cerr := c.listComments(owner, name, number)
+	comments, truncated, cerr := c.listIssueActivity(owner, name, number)
 	if cerr != nil {
 		return mapIssue(issue), nil, false, cerr
 	}
@@ -547,6 +552,91 @@ func (c *Client) listComments(owner, name string, number int) ([]*CommentInfo, b
 	return out, hasNext(resp), nil
 }
 
+func (c *Client) listIssueActivity(owner, name string, number int) ([]*CommentInfo, bool, error) {
+	opts := &gh.ListOptions{PerPage: 100}
+	events, resp, err := c.raw.Issues.ListIssueTimeline(context.Background(), owner, name, number, opts)
+	if err != nil {
+		return c.listComments(owner, name, number)
+	}
+	out := make([]*CommentInfo, 0, len(events))
+	for _, ev := range events {
+		if item := mapTimeline(ev); item != nil {
+			out = append(out, item)
+		}
+	}
+	return out, hasNext(resp), nil
+}
+
+func mapTimeline(ev *gh.Timeline) *CommentInfo {
+	if ev == nil {
+		return nil
+	}
+	author := login(ev.GetActor())
+	if author == "" {
+		author = login(ev.GetUser())
+	}
+	item := &CommentInfo{
+		Author:    author,
+		UpdatedAt: ev.GetCreatedAt().Time,
+		System:    true,
+	}
+	switch ev.GetEvent() {
+	case "commented":
+		item.System = false
+		item.Author = login(ev.GetUser())
+		if item.Author == "" {
+			item.Author = author
+		}
+		item.Body = ev.GetBody()
+		return item
+	case "renamed":
+		from, to := "", ""
+		if r := ev.GetRename(); r != nil {
+			from, to = r.GetFrom(), r.GetTo()
+		}
+		item.Body = fmt.Sprintf("changed title from **%s** to **%s**", from, to)
+		return item
+	case "closed":
+		item.Body = "closed this"
+		return item
+	case "reopened":
+		item.Body = "reopened this"
+		return item
+	case "labeled":
+		item.Body = fmt.Sprintf("added label **%s**", labelName(ev))
+		return item
+	case "unlabeled":
+		item.Body = fmt.Sprintf("removed label **%s**", labelName(ev))
+		return item
+	case "assigned":
+		who := login(ev.GetAssignee())
+		if who == "" {
+			who = author
+		}
+		item.Body = fmt.Sprintf("assigned **%s**", who)
+		return item
+	case "unassigned":
+		who := login(ev.GetAssignee())
+		if who == "" {
+			who = author
+		}
+		item.Body = fmt.Sprintf("unassigned **%s**", who)
+		return item
+	case "referenced", "cross-referenced":
+		item.Body = "referenced this"
+		return item
+	default:
+		return nil
+	}
+}
+
+func labelName(ev *gh.Timeline) string {
+	if ev == nil || ev.GetLabel() == nil {
+		return ""
+	}
+	return ev.GetLabel().GetName()
+}
+
 func mapRepo(repo *gh.Repository) *RepoInfo {
 	if repo == nil {
 		return &RepoInfo{}
@@ -594,6 +684,10 @@ func mapIssue(issue *gh.Issue) *IssueInfo {
 	if issue == nil {
 		return &IssueInfo{}
 	}
+	plus, minus := 0, 0
+	if r := issue.GetReactions(); r != nil {
+		plus, minus = r.GetPlusOne(), r.GetMinusOne()
+	}
 	return &IssueInfo{
 		Number:    issue.GetNumber(),
 		Title:     issue.GetTitle(),
@@ -601,6 +695,10 @@ func mapIssue(issue *gh.Issue) *IssueInfo {
 		Author:    login(issue.User),
 		Body:      issue.GetBody(),
 		HTMLURL:   issue.GetHTMLURL(),
+		Comments:  issue.GetComments(),
+		PlusOne:   plus,
+		MinusOne:  minus,
+		CreatedAt: issue.GetCreatedAt().Time,
 		UpdatedAt: issue.GetUpdatedAt().Time,
 	}
 }
