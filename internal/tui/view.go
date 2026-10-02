@@ -403,7 +403,7 @@ func (m Model) viewListCore() string {
 		b.WriteString(m.repoListHeader(width))
 		b.WriteString("\n")
 	}
-	if m.tab == tabPRs && len(rows) > 0 {
+	if (m.tab == tabPRs || m.tab == tabIssues) && len(rows) > 0 {
 		b.WriteString(m.prListHeader(width))
 		b.WriteString("\n")
 	}
@@ -545,7 +545,7 @@ func (m Model) listRows() []string {
 	case tabIssues:
 		rows := make([]string, len(m.issues))
 		for i, issue := range m.issues {
-			rows[i] = m.renderItem(statusBadge(issue.State), issueRest(issue), i == m.issueCursor, width)
+			rows[i] = m.renderIssueRow(issue, i == m.issueCursor, width)
 		}
 		return rows
 	case tabActions:
@@ -580,6 +580,23 @@ func (m Model) renderPRRow(pr *gh.PullInfo, selected bool, width int) string {
 		draft = warningStyle.Render(" DRAFT")
 	}
 	line := id + "  " + titleCol + "  " + state + "  " + author + "  " + updated + draft
+	st := normalItemStyle
+	mark := "  "
+	if selected {
+		st = selectedStyle
+		mark = "▶ "
+	}
+	return st.Width(width).Render(mark + line)
+}
+
+func (m Model) renderIssueRow(issue *gh.IssueInfo, selected bool, width int) string {
+	titleW := prTitleWidth(width)
+	id := padColumn(fmt.Sprintf("#%-4d", issue.Number), prIDColW)
+	titleCol := padColumn(fit(issue.Title, titleW), titleW)
+	state := padStatusBadge(statusBadge(issue.State), prStateColW)
+	author := padColumn(fit(issue.Author, prAuthorColW), prAuthorColW)
+	updated := dimStyle.Render(tableTime(issue.UpdatedAt))
+	line := id + "  " + titleCol + "  " + state + "  " + author + "  " + updated
 	st := normalItemStyle
 	mark := "  "
 	if selected {
@@ -651,10 +668,6 @@ func pullBadge(pr *gh.PullInfo) string {
 		return statusBadge("draft")
 	}
 	return statusBadge(pr.State)
-}
-
-func issueRest(issue *gh.IssueInfo) string {
-	return fmt.Sprintf("#%d  %s  %s  %s", issue.Number, issue.Title, issue.Author, shortTime(issue.UpdatedAt))
 }
 
 func shortTime(t time.Time) string {
@@ -809,7 +822,7 @@ func (m Model) listHeight() int {
 	if m.tab == tabRepos {
 		h -= 5 // search, blank line, column header, rule, spacer
 	}
-	if (m.tab == tabPRs || m.tab == tabActions) && m.listLen() > 0 {
+	if (m.tab == tabPRs || m.tab == tabIssues || m.tab == tabActions) && m.listLen() > 0 {
 		h -= 2 // column header, rule
 	}
 	if h < 1 {

@@ -226,6 +226,63 @@ func TestPRListTableLayout(t *testing.T) {
 	}
 }
 
+func TestViewLineCountWithIssues(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 80
+	m.height = 24
+	m.tab = tabIssues
+	m.username = "nospor"
+	m.issues = []*gh.IssueInfo{{Number: 1, Title: "test issue", State: "closed", Author: "robertn"}}
+
+	got := m.View()
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if len(lines) > m.height {
+		t.Fatalf("with Issues: rendered %d lines, terminal height %d", len(lines), m.height)
+	}
+}
+
+func TestIssuesListTableLayout(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 140
+	m.height = 24
+	m.tab = tabIssues
+	m.username = "nospor"
+	m.issues = []*gh.IssueInfo{{
+		Number:    1,
+		Title:     "test issue kkkk",
+		State:     "closed",
+		Author:    "robertn",
+		UpdatedAt: time.Date(2026, 7, 20, 9, 26, 0, 0, time.Local),
+	}, {
+		Number:    2,
+		Title:     "new tst2 222",
+		State:     "closed",
+		Author:    "robertn",
+		UpdatedAt: time.Date(2026, 7, 20, 8, 56, 0, 0, time.Local),
+	}}
+
+	got := plain(m.View())
+	for _, want := range []string{
+		"Title", "State", "Author", "Updated",
+		"#1", "#2", "test issue kkkk", "new tst2 222", "robertn",
+		"2026-07-20 09:26", "2026-07-20 08:56", "closed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Issues table missing %q in:\n%s", want, got)
+		}
+	}
+}
+
 func TestViewLineCountWithActions(t *testing.T) {
 	cfg := &config.Config{Servers: []config.Server{{
 		Name: "github.com",
