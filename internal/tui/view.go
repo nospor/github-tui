@@ -362,8 +362,13 @@ func (m Model) viewList() string {
 }
 
 const (
-	repoVisColW  = 9
-	repoNameColW = 42
+	repoVisColW   = 9
+	repoNameColW  = 42
+	prIDColW      = 6
+	prTitleColMax = 55
+	prStateColW   = 16
+	prAuthorColW  = 14
+	prUpdatedColW = 16
 )
 
 func (m Model) viewListCore() string {
@@ -384,11 +389,16 @@ func (m Model) viewListCore() string {
 	var b strings.Builder
 	b.WriteString(subtitleStyle.Render(title))
 	b.WriteString("\n")
+	width := max(20, m.width-2)
 	if m.tab == tabRepos {
 		b.WriteString("  ")
 		b.WriteString(m.repoInput.View())
 		b.WriteString("\n\n")
-		b.WriteString(m.repoListHeader(max(20, m.width-2)))
+		b.WriteString(m.repoListHeader(width))
+		b.WriteString("\n")
+	}
+	if m.tab == tabPRs && len(rows) > 0 {
+		b.WriteString(m.prListHeader(width))
 		b.WriteString("\n")
 	}
 	if len(rows) == 0 {
@@ -413,6 +423,34 @@ func (m Model) repoListHeader(width int) string {
 	)
 	rule := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", width))
 	return header + "\n" + rule
+}
+
+func (m Model) prListHeader(width int) string {
+	titleW := prTitleWidth(width)
+	header := lipgloss.NewStyle().Foreground(colorMuted).PaddingLeft(2).Render(
+		fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %-*s",
+			prIDColW, "#",
+			titleW, "Title",
+			prStateColW, "State",
+			prAuthorColW, "Author",
+			prUpdatedColW, "Updated"),
+	)
+	rule := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", width))
+	return header + "\n" + rule
+}
+
+func prTitleWidth(rowWidth int) int {
+	const mark = 2
+	const gaps = 8 // 4 column gaps of "  "
+	fixed := mark + prIDColW + gaps + prStateColW + prAuthorColW + prUpdatedColW
+	w := rowWidth - fixed
+	if w > prTitleColMax {
+		return prTitleColMax
+	}
+	if w < 8 {
+		return 8
+	}
+	return w
 }
 
 func (m Model) listTitle() string {
@@ -462,7 +500,7 @@ func (m Model) listRows() []string {
 	case tabPRs:
 		rows := make([]string, len(m.prs))
 		for i, pr := range m.prs {
-			rows[i] = m.renderItem(pullBadge(pr), pullRest(pr), i == m.prCursor, width)
+			rows[i] = m.renderPRRow(pr, i == m.prCursor, width)
 		}
 		return rows
 	case tabIssues:
@@ -485,6 +523,31 @@ func (m Model) listRows() []string {
 		}
 		return rows
 	}
+}
+
+func (m Model) renderPRRow(pr *gh.PullInfo, selected bool, width int) string {
+	title := pr.Title
+	if pr.Draft {
+		title = "[DRAFT] " + title
+	}
+	titleW := prTitleWidth(width)
+	id := padColumn(fmt.Sprintf("#%-4d", pr.Number), prIDColW)
+	titleCol := padColumn(fit(title, titleW), titleW)
+	state := padStatusBadge(statusBadge(pr.State), prStateColW)
+	author := padColumn(fit(pr.Author, prAuthorColW), prAuthorColW)
+	updated := dimStyle.Render(tableTime(pr.UpdatedAt))
+	draft := ""
+	if pr.Draft {
+		draft = warningStyle.Render(" DRAFT")
+	}
+	line := id + "  " + titleCol + "  " + state + "  " + author + "  " + updated + draft
+	st := normalItemStyle
+	mark := "  "
+	if selected {
+		st = selectedStyle
+		mark = "▶ "
+	}
+	return st.Width(width).Render(mark + line)
 }
 
 func (m Model) renderRepoRow(repo *gh.RepoInfo, selected bool, width int) string {
@@ -533,10 +596,6 @@ func pullBadge(pr *gh.PullInfo) string {
 	return statusBadge(pr.State)
 }
 
-func pullRest(pr *gh.PullInfo) string {
-	return fmt.Sprintf("#%d  %s  %s → %s  %s  %s", pr.Number, pr.Title, pr.Head, pr.Base, pr.Author, shortTime(pr.UpdatedAt))
-}
-
 func issueRest(issue *gh.IssueInfo) string {
 	return fmt.Sprintf("#%d  %s  %s  %s", issue.Number, issue.Title, issue.Author, shortTime(issue.UpdatedAt))
 }
@@ -550,6 +609,13 @@ func shortTime(t time.Time) string {
 		return ""
 	}
 	return t.Local().Format("Jan 02 15:04")
+}
+
+func tableTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.Local().Format("2006-01-02 15:04")
 }
 
 func (m Model) viewTextDetail() string {
@@ -689,6 +755,9 @@ func (m Model) listHeight() int {
 	}
 	if m.tab == tabRepos {
 		h -= 5 // search, blank line, column header, rule, spacer
+	}
+	if m.tab == tabPRs && m.listLen() > 0 {
+		h -= 2 // column header, rule
 	}
 	if h < 1 {
 		return 1

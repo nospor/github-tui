@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -182,6 +183,46 @@ func TestViewLineCountWithPRs(t *testing.T) {
 	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
 	if len(lines) > m.height {
 		t.Fatalf("with PRs: rendered %d lines, terminal height %d", len(lines), m.height)
+	}
+}
+
+func TestPRListTableLayout(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 140
+	m.height = 24
+	m.tab = tabPRs
+	m.username = "nospor"
+	m.prs = []*gh.PullInfo{{
+		Number:    553,
+		Title:     "J-ET Reporting menu rebrand and reorganisation",
+		State:     "open",
+		Draft:     true,
+		Author:    "carmermn",
+		UpdatedAt: time.Date(2026, 10, 2, 8, 30, 0, 0, time.Local),
+	}, {
+		Number:    534,
+		Title:     "build(docker): bake application code into image",
+		State:     "open",
+		Author:    "simonl",
+		UpdatedAt: time.Date(2026, 9, 4, 13, 23, 0, 0, time.Local),
+	}}
+
+	got := plain(m.View())
+	for _, want := range []string{"Title", "State", "Author", "Updated", "#553", "#534", "[DRAFT]", "carmermn", "simonl", "2026-10-02 08:30", "2026-09-04 13:23"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("PR table missing %q in:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "DRAFT") {
+		t.Fatal("expected DRAFT marker for draft PR")
+	}
+	if strings.Contains(got, "head →") {
+		t.Fatal("PR list should use columns, not head → base inline rest")
 	}
 }
 
