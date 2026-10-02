@@ -214,6 +214,33 @@ func (m Model) cmdSetIssue(number int, state string) tea.Cmd {
 	}, "Issue #"+itoa(number)+" "+state)
 }
 
+func (m Model) cmdVoteIssue(number int, content string) tea.Cmd {
+	client := m.client
+	full := m.repoFull()
+	username := m.username
+	return func() tea.Msg {
+		added, err := client.ToggleIssueVote(full, number, content, username)
+		if err != nil {
+			return errMsg{err}
+		}
+		return doneMsg{text: voteStatus(content, added), reloadList: true, reloadDetail: true}
+	}
+}
+
+func voteStatus(content string, added bool) string {
+	up := content != "-1"
+	switch {
+	case up && added:
+		return "👍 Vote up added"
+	case up:
+		return "👍 Vote up removed"
+	case added:
+		return "👎 Vote down added"
+	default:
+		return "👎 Vote down removed"
+	}
+}
+
 func (m Model) cmdMerge(number int) tea.Cmd {
 	return m.cmdMutate(func(client *gh.Client, full string) error {
 		return client.MergePull(full, number)

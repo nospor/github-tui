@@ -966,6 +966,14 @@ func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
 		if m.detailPR != nil || m.detailIssue != nil {
 			return m.startComment()
 		}
+	case "+":
+		if m.detailIssue != nil {
+			return m.track(m.cmdVoteIssue(m.detailIssue.Number, "+1"))
+		}
+	case "-":
+		if m.detailIssue != nil {
+			return m.track(m.cmdVoteIssue(m.detailIssue.Number, "-1"))
+		}
 	case "x":
 		return m.closeDetail()
 	case "O":

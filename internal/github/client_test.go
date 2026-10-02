@@ -64,3 +64,33 @@ func TestMapTimeline(t *testing.T) {
 		t.Fatal("expected noisy events to be skipped")
 	}
 }
+
+func TestUserReactionID(t *testing.T) {
+	reactions := []*gh.Reaction{
+		nil,
+		{ID: gh.Ptr(int64(11)), Content: gh.Ptr("+1"), User: &gh.User{Login: gh.Ptr("alice")}},
+		{ID: gh.Ptr(int64(22)), Content: gh.Ptr("-1"), User: &gh.User{Login: gh.Ptr("Bob")}},
+	}
+	if got := userReactionID(reactions, "+1", "alice"); got != 11 {
+		t.Fatalf("+1 alice: got %d", got)
+	}
+	if got := userReactionID(reactions, "-1", "bob"); got != 22 {
+		t.Fatalf("-1 bob: got %d", got)
+	}
+	if got := userReactionID(reactions, "-1", "alice"); got != 0 {
+		t.Fatalf("alice has no -1, got %d", got)
+	}
+}
+
+func TestToggleIssueVoteValidation(t *testing.T) {
+	c := &Client{}
+	if _, err := c.ToggleIssueVote("owner/repo", 1, "heart", "alice"); err == nil {
+		t.Fatal("expected unsupported vote error")
+	}
+	if _, err := c.ToggleIssueVote("owner/repo", 1, "+1", ""); err == nil {
+		t.Fatal("expected username required error")
+	}
+	if _, err := c.ToggleIssueVote("bad", 1, "+1", "alice"); err == nil {
+		t.Fatal("expected split repo error")
+	}
+}

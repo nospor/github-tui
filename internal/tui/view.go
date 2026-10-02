@@ -138,6 +138,9 @@ func (m Model) hints() string {
 		if m.detailPR != nil {
 			h = append([][2]string{{"tab", "diff"}}, h...)
 		}
+		if m.detailIssue != nil {
+			h = append([][2]string{{"+", "vote up"}, {"-", "vote down"}}, h...)
+		}
 		return joinHints(h)
 	default:
 		h := [][2]string{

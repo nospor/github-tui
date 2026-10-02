@@ -488,6 +488,7 @@ func TestIssueDetailLayout(t *testing.T) {
 		"ddd", "Discussions & Comments", "General Thread",
 		"@robertn", "test comment", "changed title from",
 		"https://github.com/org/app/issues/1",
+		"vote up", "vote down",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("issue detail missing %q in:\n%s", want, got)
@@ -498,5 +499,20 @@ func TestIssueDetailLayout(t *testing.T) {
 	}
 	if strings.Contains(got, "**test issue**") {
 		t.Fatal("expected system note markdown to be parsed")
+	}
+}
+
+func TestVoteStatus(t *testing.T) {
+	if got := voteStatus("+1", true); got != "👍 Vote up added" {
+		t.Fatalf("got %q", got)
+	}
+	if got := voteStatus("+1", false); got != "👍 Vote up removed" {
+		t.Fatalf("got %q", got)
+	}
+	if got := voteStatus("-1", true); got != "👎 Vote down added" {
+		t.Fatalf("got %q", got)
+	}
+	if got := voteStatus("-1", false); got != "👎 Vote down removed" {
+		t.Fatalf("got %q", got)
 	}
 }

@@ -399,6 +399,55 @@ func (c *Client) CreateIssue(full, title, body string) (*IssueInfo, error) {
 	return mapIssue(issue), nil
 }
 
+// ToggleIssueVote adds or removes a +1/-1 reaction on an issue.
+// content must be "+1" or "-1". If the authenticated user already has that
+// reaction, it is deleted and the function returns false. Otherwise it is
+// created and the function returns true.
+func (c *Client) ToggleIssueVote(full string, number int, content, username string) (added bool, err error) {
+	if content != "+1" && content != "-1" {
+		return false, fmt.Errorf("unsupported vote %q", content)
+	}
+	if username == "" {
+		return false, fmt.Errorf("username is required to toggle a vote")
+	}
+	owner, name, err := SplitRepo(full)
+	if err != nil {
+		return false, err
+	}
+	opts := &gh.ListOptions{PerPage: 100}
+	for {
+		reactions, resp, err := c.raw.Reactions.ListIssueReactions(context.Background(), owner, name, number, opts)
+		if err != nil {
+			return false, apiErr(fmt.Sprintf("list reactions on issue #%d", number), err)
+		}
+		if id := userReactionID(reactions, content, username); id != 0 {
+			_, err = c.raw.Reactions.DeleteIssueReaction(context.Background(), owner, name, number, id)
+			return false, apiErr(fmt.Sprintf("remove reaction on issue #%d", number), err)
+		}
+		if resp == nil || resp.NextPage == 0 {
+			break
+		}
+		opts.Page = resp.NextPage
+	}
+	_, _, err = c.raw.Reactions.CreateIssueReaction(context.Background(), owner, name, number, content)
+	if err != nil {
+		return false, apiErr(fmt.Sprintf("add reaction on issue #%d", number), err)
+	}
+	return true, nil
+}
+
+func userReactionID(reactions []*gh.Reaction, content, username string) int64 {
+	for _, r := range reactions {
+		if r == nil {
+			continue
+		}
+		if r.GetContent() == content && strings.EqualFold(login(r.User), username) {
+			return r.GetID()
+		}
+	}
+	return 0
+}
+
 // SetIssueState sets an issue to "open" or "closed".
 func (c *Client) SetIssueState(full string, number int, state string) error {
 	owner, name, err := SplitRepo(full)
