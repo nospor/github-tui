@@ -1,6 +1,7 @@
 package github
 
 import (
+	"net/http"
 	"testing"
 
 	gh "github.com/google/go-github/v68/github"
@@ -92,5 +93,18 @@ func TestToggleIssueVoteValidation(t *testing.T) {
 	}
 	if _, err := c.ToggleIssueVote("bad", 1, "+1", "alice"); err == nil {
 		t.Fatal("expected split repo error")
+	}
+}
+
+func TestIsNotFound(t *testing.T) {
+	if isNotFound(nil) {
+		t.Fatal("nil should not be not-found")
+	}
+	notFound := &gh.ErrorResponse{Response: &http.Response{StatusCode: http.StatusNotFound}}
+	if !isNotFound(notFound) {
+		t.Fatal("expected 404 to be not-found")
+	}
+	if isNotFound(&gh.ErrorResponse{Response: &http.Response{StatusCode: http.StatusInternalServerError}}) {
+		t.Fatal("500 should not be not-found")
 	}
 }

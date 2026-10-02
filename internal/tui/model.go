@@ -134,6 +134,11 @@ type (
 	tagsLoadedMsg struct {
 		tags []*gh.TagInfo
 	}
+	tagReleaseLoadedMsg struct {
+		tag      string
+		body     string
+		fallback string
+	}
 	tagCommitsLoadedMsg struct {
 		tag     string
 		commits []*gh.CommitInfo
@@ -499,6 +504,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.clampList()
 		}
 		return m, nil
+	case tagReleaseLoadedMsg:
+		m = m.finish()
+		if msg.tag != m.editTagName {
+			return m, nil
+		}
+		existing := msg.body
+		if existing == "" {
+			existing = msg.fallback
+		}
+		return m.openEditTag(existing)
 	case tagCommitsLoadedMsg:
 		m = m.finish()
 		m.clearItemDetail()

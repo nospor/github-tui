@@ -27,7 +27,6 @@ type TagInfo struct {
 	ShortID     string
 	AuthorName  string
 	Date        string
-	ReleaseDesc string
 }
 
 // CompareInfo is the result of comparing two refs.
@@ -236,14 +235,26 @@ func (c *Client) ListTags(full string) ([]*TagInfo, error) {
 		}
 		page = resp.NextPage
 	}
-	// Attach GitHub release notes when a release exists for the tag.
-	for _, ti := range tags {
-		rel, _, err := c.raw.Repositories.GetReleaseByTag(context.Background(), owner, name, ti.Name)
-		if err == nil && rel != nil {
-			ti.ReleaseDesc = rel.GetBody()
-		}
-	}
 	return tags, nil
+}
+
+// GetTagReleaseBody returns GitHub release notes for a tag, or "" if none exists.
+func (c *Client) GetTagReleaseBody(full, tagName string) (string, error) {
+	owner, name, err := SplitRepo(full)
+	if err != nil {
+		return "", err
+	}
+	rel, _, err := c.raw.Repositories.GetReleaseByTag(context.Background(), owner, name, tagName)
+	if err != nil {
+		if isNotFound(err) {
+			return "", nil
+		}
+		return "", apiErr("get release by tag", err)
+	}
+	if rel == nil {
+		return "", nil
+	}
+	return rel.GetBody(), nil
 }
 
 // CreateTag creates an annotated tag (or lightweight when message is empty).

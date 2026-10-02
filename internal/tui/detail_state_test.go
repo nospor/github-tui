@@ -94,6 +94,73 @@ func TestOpenTagClearsLeftoverPR(t *testing.T) {
 	}
 }
 
+func TestStartEditTagLoadsReleaseNotes(t *testing.T) {
+	m := testModel()
+	m.tab = tabTags
+	m.state = stateDetail
+	m.tagDetailName = "v1.0.0"
+
+	got, cmd := m.startEditTag(&gh.TagInfo{Name: "v1.0.0", Message: "tag msg"})
+	m = asModel(t, got)
+	if cmd == nil {
+		t.Fatal("expected a load command")
+	}
+	if m.state != stateDetail {
+		t.Fatalf("state = %v, want detail until notes load", m.state)
+	}
+	if m.editTagName != "v1.0.0" {
+		t.Fatalf("editTagName = %q", m.editTagName)
+	}
+	if !m.loading {
+		t.Fatal("expected loading while fetching release notes")
+	}
+}
+
+func TestTagReleaseLoadedOpensEditor(t *testing.T) {
+	m := testModel()
+	m.editTagName = "v1.0.0"
+	m.returnState = stateDetail
+	m.inflight = 1
+
+	got, _ := m.Update(tagReleaseLoadedMsg{tag: "v1.0.0", body: "notes", fallback: "msg"})
+	m = asModel(t, got)
+	if m.state != stateEditTag {
+		t.Fatalf("state = %v, want edit tag", m.state)
+	}
+	if m.editTagDescription.Value() != "notes" {
+		t.Fatalf("description = %q, want notes", m.editTagDescription.Value())
+	}
+}
+
+func TestTagReleaseLoadedFallsBackToMessage(t *testing.T) {
+	m := testModel()
+	m.editTagName = "v1.0.0"
+	m.returnState = stateDetail
+	m.inflight = 1
+
+	got, _ := m.Update(tagReleaseLoadedMsg{tag: "v1.0.0", body: "", fallback: "msg"})
+	m = asModel(t, got)
+	if m.editTagDescription.Value() != "msg" {
+		t.Fatalf("description = %q, want fallback msg", m.editTagDescription.Value())
+	}
+}
+
+func TestTagReleaseLoadedIgnoresStaleTag(t *testing.T) {
+	m := testModel()
+	m.editTagName = "v1.0.0"
+	m.state = stateDetail
+	m.inflight = 1
+
+	got, _ := m.Update(tagReleaseLoadedMsg{tag: "v0.9.0", body: "old notes", fallback: ""})
+	m = asModel(t, got)
+	if m.state != stateDetail {
+		t.Fatalf("state = %v, want still detail for stale load", m.state)
+	}
+	if m.editTagDescription.Value() != "" {
+		t.Fatalf("stale notes should not fill editor, got %q", m.editTagDescription.Value())
+	}
+}
+
 func TestBranchCompareLoadedClearsLeftoverRun(t *testing.T) {
 	m := testModel()
 	m.tab = tabBranches

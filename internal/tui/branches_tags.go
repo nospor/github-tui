@@ -1168,22 +1168,37 @@ func (m Model) cmdUpdateTagRelease(tagName, description string) tea.Cmd {
 	}
 }
 
+func (m Model) cmdLoadTagRelease(tagName, fallback string) tea.Cmd {
+	if m.repo == nil {
+		return nil
+	}
+	full := m.repoFull()
+	return func() tea.Msg {
+		body, err := m.client.GetTagReleaseBody(full, tagName)
+		if err != nil {
+			return errMsg{err}
+		}
+		return tagReleaseLoadedMsg{tag: tagName, body: body, fallback: fallback}
+	}
+}
+
 func (m Model) startEditTag(tag *gh.TagInfo) (Model, tea.Cmd) {
 	if tag == nil || m.repo == nil {
 		return m, nil
 	}
 	m.editTagName = tag.Name
-	// Pre-fill with existing release description if present, otherwise tag message
-	existing := tag.ReleaseDesc
-	if existing == "" {
-		existing = tag.Message
+	fallback := tag.Message
+	if fallback == "" {
+		fallback = tag.CommitTitle
 	}
-	m.editTagDescription.SetValue(existing)
-	m.editTagDescription.Blur()
-
 	m.returnState = m.state
-	m.state = stateEditTag
+	return m.track(m.cmdLoadTagRelease(tag.Name, fallback))
+}
 
+func (m Model) openEditTag(description string) (Model, tea.Cmd) {
+	m.editTagDescription.SetValue(description)
+	m.editTagDescription.Blur()
+	m.state = stateEditTag
 	cmd := m.editTagDescription.Focus()
 	m.editTagDescription.CursorEnd()
 	return m, cmd

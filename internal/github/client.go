@@ -788,6 +788,14 @@ func hasNext(resp *gh.Response) bool {
 	return resp != nil && resp.NextPage > 0
 }
 
+func isNotFound(err error) bool {
+	var ge *gh.ErrorResponse
+	if errors.As(err, &ge) && ge.Response != nil {
+		return ge.Response.StatusCode == http.StatusNotFound
+	}
+	return false
+}
+
 func apiErr(action string, err error) error {
 	if err == nil {
 		return nil
