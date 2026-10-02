@@ -10,13 +10,21 @@ import (
 	gh "github-tui/internal/github"
 )
 
+func (m Model) showTabs() bool {
+	return m.state == stateMain
+}
+
 func (m Model) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "Loading…"
 	}
 	body := padHeight(m.viewBody(), m.bodyHeight())
-	screen := lipgloss.JoinVertical(lipgloss.Left, m.viewTitle(), m.viewTabs(), body, m.viewFooter(), m.viewStatus())
-	return clipHeight(screen, m.height)
+	parts := []string{m.viewTitle()}
+	if m.showTabs() {
+		parts = append(parts, m.viewTabs())
+	}
+	parts = append(parts, body, m.viewFooter(), m.viewStatus())
+	return clipHeight(lipgloss.JoinVertical(lipgloss.Left, parts...), m.height)
 }
 
 func clipHeight(s string, height int) string {
@@ -74,7 +82,7 @@ func (m Model) viewTitle() string {
 func (m Model) viewTabs() string {
 	var b strings.Builder
 	for i, label := range tabLabels {
-		b.WriteString(tabStyle(label, m.tab == tabID(i) && m.state != stateJobLog))
+		b.WriteString(tabStyle(label, m.tab == tabID(i)))
 	}
 	return b.String()
 }
@@ -889,7 +897,10 @@ func (m Model) viewLog() string {
 }
 
 func (m Model) bodyHeight() int {
-	h := m.height - 3 // title, tabs, footer
+	h := m.height - 2 // title, footer
+	if m.showTabs() {
+		h--
+	}
 	if m.status != "" {
 		h--
 	}

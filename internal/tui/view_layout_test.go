@@ -410,6 +410,99 @@ func TestViewFooterPinnedOnTagsTab(t *testing.T) {
 	footerAtBottom(t, m, got)
 }
 
+func hasTabBar(got string) bool {
+	plainView := plain(got)
+	for _, label := range tabLabels {
+		if strings.Contains(plainView, label) {
+			return true
+		}
+	}
+	return false
+}
+
+func TestViewShowsTabsOnList(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 80
+	m.height = 24
+	m.tab = tabPRs
+	m.username = "nospor"
+	m.prs = []*gh.PullInfo{{Number: 1, Title: "Fix things", State: "open"}}
+
+	if !hasTabBar(m.View()) {
+		t.Fatal("expected tab bar on list view")
+	}
+}
+
+func TestViewHidesTabsWhenInaccessible(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	base := func() Model {
+		m := New(cfg, 0, nil, repo, "", "", 0)
+		m.width = 80
+		m.height = 24
+		m.username = "nospor"
+		return m
+	}
+
+	t.Run("pr detail", func(t *testing.T) {
+		m := base()
+		m.tab = tabPRs
+		m.state = stateDetail
+		m.detailPR = &gh.PullInfo{Number: 1, Title: "Add diffs", State: "open", Head: "feat", Base: "main"}
+		m.rebuildDetail()
+		if hasTabBar(m.View()) {
+			t.Fatal("expected no tab bar on PR detail")
+		}
+	})
+	t.Run("issue detail", func(t *testing.T) {
+		m := base()
+		m.tab = tabIssues
+		m.state = stateDetail
+		m.detailIssue = &gh.IssueInfo{Number: 1, Title: "test issue", State: "open", Author: "robertn"}
+		m.rebuildDetail()
+		if hasTabBar(m.View()) {
+			t.Fatal("expected no tab bar on issue detail")
+		}
+	})
+	t.Run("actions detail", func(t *testing.T) {
+		m := base()
+		m.tab = tabActions
+		m.state = stateDetail
+		m.detailRun = &gh.RunInfo{ID: 38459, Name: "CI", Branch: "develop", Event: "push", Status: "completed"}
+		if hasTabBar(m.View()) {
+			t.Fatal("expected no tab bar on Actions run detail")
+		}
+	})
+	t.Run("branch detail", func(t *testing.T) {
+		m := base()
+		m.tab = tabBranches
+		m.state = stateDetail
+		m.branchDetailName = "feat"
+		m.branchCommits = []*gh.CommitInfo{{ShortID: "abc1234", Title: "wip"}}
+		if hasTabBar(m.View()) {
+			t.Fatal("expected no tab bar on branch detail")
+		}
+	})
+	t.Run("job log", func(t *testing.T) {
+		m := base()
+		m.tab = tabActions
+		m.state = stateJobLog
+		m.logName = "test"
+		m.logLines = []string{"ok"}
+		if hasTabBar(m.View()) {
+			t.Fatal("expected no tab bar on job log")
+		}
+	})
+}
+
 func TestViewPRDiffSplitFitsTerminal(t *testing.T) {
 	cfg := &config.Config{Servers: []config.Server{{
 		Name: "github.com",
