@@ -64,7 +64,11 @@ func (m Model) viewTitle() string {
 	if m.loading {
 		left += "   loading…"
 	}
-	return titleBarStyle.Width(m.width).Render(fit(left, m.width))
+	avail := m.width - 4 // titleBarStyle horizontal padding
+	if avail < 1 {
+		avail = m.width
+	}
+	return titleBarStyle.Render(fit(left, avail))
 }
 
 func (m Model) viewTabs() string {

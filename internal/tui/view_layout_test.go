@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"github-tui/internal/config"
 	gh "github-tui/internal/github"
 )
@@ -28,6 +30,27 @@ func TestViewLineCountWithEmptyPRList(t *testing.T) {
 	}
 	if !strings.Contains(got, "github-tui") {
 		t.Fatal("expected title bar in view")
+	}
+}
+
+func TestViewTitleBarHugsText(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	m := New(cfg, 0, nil, nil, "", "", 0)
+	m.width = 80
+	m.height = 24
+	m.tab = tabRepos
+	m.username = "nospor"
+
+	title := m.viewTitle()
+	w := lipgloss.Width(title)
+	if w >= m.width {
+		t.Fatalf("title bar width %d spanned the full terminal (%d)", w, m.width)
+	}
+	if !strings.Contains(title, "github-tui") {
+		t.Fatalf("expected title text, got %q", title)
 	}
 }
 
