@@ -362,13 +362,19 @@ func (m Model) viewList() string {
 }
 
 const (
-	repoVisColW   = 9
-	repoNameColW  = 42
-	prIDColW      = 6
-	prTitleColMax = 55
-	prStateColW   = 16
-	prAuthorColW  = 14
-	prUpdatedColW = 16
+	repoVisColW    = 9
+	repoNameColW   = 42
+	prIDColW       = 6
+	prTitleColMax  = 55
+	prStateColW    = 16
+	prAuthorColW   = 14
+	prUpdatedColW  = 16
+	runIDColW      = 12
+	runRefColMax   = 22
+	runStatusColW  = 16
+	runActorColW   = 14
+	runSourceColW  = 12
+	runUpdatedColW = 16
 )
 
 func (m Model) viewListCore() string {
@@ -399,6 +405,10 @@ func (m Model) viewListCore() string {
 	}
 	if m.tab == tabPRs && len(rows) > 0 {
 		b.WriteString(m.prListHeader(width))
+		b.WriteString("\n")
+	}
+	if m.tab == tabActions && len(rows) > 0 {
+		b.WriteString(m.actionsListHeader(width))
 		b.WriteString("\n")
 	}
 	if len(rows) == 0 {
@@ -446,6 +456,35 @@ func prTitleWidth(rowWidth int) int {
 	w := rowWidth - fixed
 	if w > prTitleColMax {
 		return prTitleColMax
+	}
+	if w < 8 {
+		return 8
+	}
+	return w
+}
+
+func (m Model) actionsListHeader(width int) string {
+	refW := runRefWidth(width)
+	header := lipgloss.NewStyle().Foreground(colorMuted).PaddingLeft(2).Render(
+		fmt.Sprintf("%-*s  %-*s  %-*s  %-*s  %-*s  %-*s",
+			runIDColW, "ID",
+			refW, "Ref",
+			runStatusColW, "Status",
+			runActorColW, "Triggered by",
+			runSourceColW, "Source",
+			runUpdatedColW, "Updated"),
+	)
+	rule := lipgloss.NewStyle().Foreground(colorBorder).Render(strings.Repeat("─", width))
+	return header + "\n" + rule
+}
+
+func runRefWidth(rowWidth int) int {
+	const mark = 2
+	const gaps = 10 // 5 column gaps of "  "
+	fixed := mark + runIDColW + gaps + runStatusColW + runActorColW + runSourceColW + runUpdatedColW
+	w := rowWidth - fixed
+	if w > runRefColMax {
+		return runRefColMax
 	}
 	if w < 8 {
 		return 8
@@ -512,7 +551,7 @@ func (m Model) listRows() []string {
 	case tabActions:
 		rows := make([]string, len(m.runs))
 		for i, run := range m.runs {
-			rows[i] = m.renderItem(statusBadge(run.Badge()), runRest(run), i == m.runCursor, width)
+			rows[i] = m.renderRunRow(run, i == m.runCursor, width)
 		}
 		return rows
 	default:
@@ -541,6 +580,24 @@ func (m Model) renderPRRow(pr *gh.PullInfo, selected bool, width int) string {
 		draft = warningStyle.Render(" DRAFT")
 	}
 	line := id + "  " + titleCol + "  " + state + "  " + author + "  " + updated + draft
+	st := normalItemStyle
+	mark := "  "
+	if selected {
+		st = selectedStyle
+		mark = "▶ "
+	}
+	return st.Width(width).Render(mark + line)
+}
+
+func (m Model) renderRunRow(run *gh.RunInfo, selected bool, width int) string {
+	refW := runRefWidth(width)
+	id := padColumn(fit(fmt.Sprintf("#%d", run.ID), runIDColW), runIDColW)
+	ref := padColumn(fit(run.Branch, refW), refW)
+	status := padStatusBadge(statusBadge(run.Badge()), runStatusColW)
+	actor := padColumn(fit(run.Actor, runActorColW), runActorColW)
+	source := padColumn(fit(run.Event, runSourceColW), runSourceColW)
+	updated := dimStyle.Render(tableTime(run.UpdatedAt))
+	line := id + "  " + ref + "  " + status + "  " + actor + "  " + source + "  " + updated
 	st := normalItemStyle
 	mark := "  "
 	if selected {
@@ -598,10 +655,6 @@ func pullBadge(pr *gh.PullInfo) string {
 
 func issueRest(issue *gh.IssueInfo) string {
 	return fmt.Sprintf("#%d  %s  %s  %s", issue.Number, issue.Title, issue.Author, shortTime(issue.UpdatedAt))
-}
-
-func runRest(run *gh.RunInfo) string {
-	return fmt.Sprintf("%s  %s  %s  %s", run.Name, run.Branch, run.Event, shortTime(run.UpdatedAt))
 }
 
 func shortTime(t time.Time) string {
@@ -695,7 +748,7 @@ func (m Model) viewRun() string {
 	b.WriteString("  ")
 	b.WriteString(boldStyle.Render(run.Name))
 	b.WriteString("\n")
-	b.WriteString(dimStyle.Render(fmt.Sprintf("%s   %s   %s   run %d", run.Branch, run.Event, shortTime(run.UpdatedAt), run.ID)))
+	b.WriteString(dimStyle.Render(fmt.Sprintf("%s   %s   %s   %s   run %d", run.Branch, run.Event, run.Actor, shortTime(run.UpdatedAt), run.ID)))
 	b.WriteString("\n\n")
 	b.WriteString(subtitleStyle.Render("Jobs"))
 	b.WriteString("\n")
@@ -756,7 +809,7 @@ func (m Model) listHeight() int {
 	if m.tab == tabRepos {
 		h -= 5 // search, blank line, column header, rule, spacer
 	}
-	if m.tab == tabPRs && m.listLen() > 0 {
+	if (m.tab == tabPRs || m.tab == tabActions) && m.listLen() > 0 {
 		h -= 2 // column header, rule
 	}
 	if h < 1 {

@@ -77,6 +77,7 @@ type RunInfo struct {
 	Conclusion string
 	Branch     string
 	Event      string
+	Actor      string
 	HTMLURL    string
 	UpdatedAt  time.Time
 }
@@ -612,6 +613,10 @@ func mapRun(run *gh.WorkflowRun) *RunInfo {
 	if name == "" {
 		name = run.GetDisplayTitle()
 	}
+	actor := login(run.GetTriggeringActor())
+	if actor == "" {
+		actor = login(run.GetActor())
+	}
 	return &RunInfo{
 		ID:         run.GetID(),
 		Name:       name,
@@ -619,6 +624,7 @@ func mapRun(run *gh.WorkflowRun) *RunInfo {
 		Conclusion: run.GetConclusion(),
 		Branch:     run.GetHeadBranch(),
 		Event:      run.GetEvent(),
+		Actor:      actor,
 		HTMLURL:    run.GetHTMLURL(),
 		UpdatedAt:  run.GetUpdatedAt().Time,
 	}

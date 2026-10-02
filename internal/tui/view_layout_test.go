@@ -226,6 +226,75 @@ func TestPRListTableLayout(t *testing.T) {
 	}
 }
 
+func TestViewLineCountWithActions(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 80
+	m.height = 24
+	m.tab = tabActions
+	m.username = "nospor"
+	m.runs = []*gh.RunInfo{{ID: 38459, Name: "CI", Branch: "develop", Event: "push", Status: "completed", Conclusion: "success"}}
+
+	got := m.View()
+	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
+	if len(lines) > m.height {
+		t.Fatalf("with Actions: rendered %d lines, terminal height %d", len(lines), m.height)
+	}
+}
+
+func TestActionsListTableLayout(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "nospor/teams-tui-go"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 140
+	m.height = 24
+	m.tab = tabActions
+	m.username = "nospor"
+	m.runs = []*gh.RunInfo{{
+		ID:         38459,
+		Name:       "CI",
+		Branch:     "refs/merge-requests/5/head",
+		Event:      "pull_request",
+		Actor:      "carmermn",
+		Status:     "completed",
+		Conclusion: "success",
+		UpdatedAt:  time.Date(2026, 10, 2, 7, 25, 0, 0, time.Local),
+	}, {
+		ID:         38318,
+		Name:       "CI",
+		Branch:     "develop",
+		Event:      "push",
+		Actor:      "simonl",
+		Status:     "completed",
+		Conclusion: "failure",
+		UpdatedAt:  time.Date(2026, 9, 29, 15, 7, 0, 0, time.Local),
+	}}
+
+	got := plain(m.View())
+	for _, want := range []string{
+		"ID", "Ref", "Status", "Triggered by", "Source", "Updated",
+		"#38459", "#38318", "develop", "carmermn", "simonl",
+		"push", "pull_request", "2026-10-02 07:25", "2026-09-29 15:07",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("Actions table missing %q in:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "success") {
+		t.Fatal("expected success status badge")
+	}
+	if !strings.Contains(got, "failed") {
+		t.Fatal("expected failed status badge")
+	}
+}
+
 func footerAtBottom(t *testing.T, m Model, got string) {
 	t.Helper()
 	lines := strings.Split(strings.TrimRight(got, "\n"), "\n")
