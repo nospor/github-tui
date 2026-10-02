@@ -113,14 +113,21 @@ func (m Model) cmdIssue(number int) tea.Cmd {
 }
 
 func (m Model) cmdRun(id int64) tea.Cmd {
+	return m.cmdLoadRun(id, false)
+}
+
+func (m Model) cmdLoadRun(id int64, quiet bool) tea.Cmd {
 	client := m.client
 	full := m.repoFull()
 	return func() tea.Msg {
 		item, jobs, err := client.GetRun(full, id)
 		if item == nil && err != nil {
+			if quiet {
+				return nil
+			}
 			return errMsg{err}
 		}
-		msg := runDetailMsg{item: item, jobs: jobs}
+		msg := runDetailMsg{item: item, jobs: jobs, quiet: quiet}
 		if err != nil {
 			msg.jobErr = err.Error()
 		}
@@ -142,6 +149,13 @@ func (m Model) cmdOpenInitial() tea.Cmd {
 }
 
 func (m Model) cmdJobLog(job *gh.JobInfo) tea.Cmd {
+	return m.cmdLoadJobLog(job, false)
+}
+
+func (m Model) cmdLoadJobLog(job *gh.JobInfo, quiet bool) tea.Cmd {
+	if job == nil {
+		return nil
+	}
 	client := m.client
 	full := m.repoFull()
 	name := job.Name
@@ -149,12 +163,15 @@ func (m Model) cmdJobLog(job *gh.JobInfo) tea.Cmd {
 	return func() tea.Msg {
 		text, err := client.JobLog(full, id)
 		if err != nil {
+			if quiet {
+				return nil
+			}
 			return errMsg{err}
 		}
 		if strings.TrimSpace(text) == "" {
 			text = "(no log output)"
 		}
-		return logMsg{name: name, text: text}
+		return logMsg{name: name, text: text, jobID: id, quiet: quiet}
 	}
 }
 

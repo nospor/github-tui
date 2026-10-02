@@ -117,7 +117,7 @@ func (m Model) hints() string {
 	case stateDispatch:
 		return joinHints([][2]string{{"tab", "next field"}, {"j/k", "choice"}, {"ctrl+s", "run"}, {"esc", "cancel"}})
 	case stateJobLog:
-		return joinHints([][2]string{{"j/k", "scroll"}, {"g/G", "top/bottom"}, {"esc", "back"}})
+		return joinHints([][2]string{{"j/k", "scroll"}, {"g/G", "top/bottom"}, {"r", "refresh"}, {"esc", "back"}})
 	case stateDetail:
 		if m.inRefDetail() {
 			if m.branchCommitDiffPanelOpen || m.tagCommitDiffPanelOpen {
@@ -141,7 +141,7 @@ func (m Model) hints() string {
 		if m.detailRun != nil {
 			return joinHints([][2]string{
 				{"j/k", "job"}, {"enter", "log"}, {"w", "run"}, {"R", "rerun"}, {"c", "cancel"},
-				{"o", "open"}, {"y", "yank"}, {"esc", "back"},
+				{"r", "refresh"}, {"o", "open"}, {"y", "yank"}, {"esc", "back"},
 			})
 		}
 		h := [][2]string{

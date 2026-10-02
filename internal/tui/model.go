@@ -101,11 +101,15 @@ type (
 		item   *gh.RunInfo
 		jobs   []*gh.JobInfo
 		jobErr string
+		quiet  bool
 	}
 	logMsg struct {
-		name string
-		text string
+		name  string
+		text  string
+		jobID int64
+		quiet bool
 	}
+	tickMsg struct{}
 	doneMsg struct {
 		text         string
 		reloadList   bool
@@ -275,6 +279,7 @@ type Model struct {
 	logName            string
 	logLines           []string
 	logScroll          int
+	logJobID           int64
 
 	formKind   string
 	formFocus  int
@@ -595,26 +600,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.rebuildDetail()
 		return m, nil
 	case runDetailMsg:
-		m = m.finish()
+		if !msg.quiet {
+			m = m.finish()
+		}
+		refresh := m.viewingSameRun(msg.item)
 		m.clearRefDetail()
 		m.detailRun = msg.item
-		m.jobs = msg.jobs
+		if !(refresh && msg.jobs == nil) {
+			m.jobs = msg.jobs
+		}
 		m.detailPR = nil
 		m.detailIssue = nil
 		m.clearPRDiff()
-		m.jobCursor = 0
-		m.jobOffset = 0
-		m.state = stateDetail
-		if msg.jobErr != "" {
-			m.setStatus(msg.jobErr)
+		if !refresh {
+			m.jobCursor = 0
+			m.jobOffset = 0
+			m.state = stateDetail
+			if msg.jobErr != "" {
+				m.setStatus(msg.jobErr)
+				return m, tea.Batch(m.scheduleClear(), m.scheduleRunPoll())
+			}
+			return m, m.scheduleRunPoll()
 		}
-		return m, m.scheduleClear()
+		m.clampJobCursor()
+		return m, m.scheduleRunPoll()
 	case logMsg:
-		m = m.finish()
-		m.logName = msg.name
-		m.logLines = strings.Split(strings.ReplaceAll(msg.text, "\r\n", "\n"), "\n")
-		m.logScroll = 0
-		m.state = stateJobLog
+		if !msg.quiet {
+			m = m.finish()
+		}
+		m.applyLog(msg)
+		return m, nil
+	case tickMsg:
+		if cmd := m.pollRunCmds(); cmd != nil {
+			return m, cmd
+		}
 		return m, nil
 	case doneMsg:
 		m = m.finish()
@@ -1094,6 +1113,11 @@ func (m Model) handleLog(key string) (tea.Model, tea.Cmd) {
 		m.logScroll = 0
 	case "G":
 		m.logScroll = max(0, len(m.logLines)-page)
+	case "r":
+		if job := m.jobByID(m.logJobID); job != nil {
+			return m.track(m.cmdJobLog(job))
+		}
+		return m.openJobLog()
 	case "o":
 		if m.jobCursor >= 0 && m.jobCursor < len(m.jobs) && m.jobs[m.jobCursor].HTMLURL != "" {
 			return m.openURL(m.jobs[m.jobCursor].HTMLURL)
@@ -1873,6 +1897,16 @@ func (m *Model) moveJob(delta int) {
 	}
 	if m.jobCursor >= len(m.jobs) {
 		m.jobCursor = len(m.jobs) - 1
+	}
+	m.clampJobs()
+}
+
+func (m *Model) clampJobCursor() {
+	if m.jobCursor >= len(m.jobs) {
+		m.jobCursor = max(0, len(m.jobs)-1)
+	}
+	if m.jobCursor < 0 {
+		m.jobCursor = 0
 	}
 	m.clampJobs()
 }
