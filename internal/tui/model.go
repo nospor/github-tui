@@ -270,6 +270,11 @@ type Model struct {
 	links        []linkItem
 	linkCursor   int
 	serverCursor int
+
+	yankOpen      bool
+	yankURLSelect bool
+	yankItems     []linkItem
+	yankCursor    int
 }
 
 // New builds the initial model. repo may be nil when nothing was auto-detected.
@@ -867,6 +872,12 @@ func (m Model) jumpTab(tab tabID) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
+	if m.yankOpen {
+		return m.handleYankPopupKey(key)
+	}
+	if m.yankURLSelect {
+		return m.handleYankURLSelectKey(key)
+	}
 	if m.prDiffPanelOpen {
 		switch key {
 		case "q":
@@ -987,7 +998,7 @@ func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
 	case "o":
 		return m.openDetailLinks()
 	case "y":
-		return m.yankDetail()
+		return m.openYank()
 	case "r":
 		if cmd := m.reloadDetail(); cmd != nil {
 			return m.track(cmd)

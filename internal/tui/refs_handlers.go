@@ -23,6 +23,7 @@ func (m *Model) clearItemDetail() {
 	m.detailScroll = 0
 	m.detailLines = nil
 	m.clearPRDiff()
+	m.closeYank()
 }
 
 func (m *Model) clearRefDetail() {

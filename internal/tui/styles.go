@@ -39,6 +39,7 @@ var (
 	selectedStyle   lipgloss.Style
 	normalItemStyle lipgloss.Style
 	dialogStyle     lipgloss.Style
+	panelStyle      lipgloss.Style
 )
 
 func init() {
@@ -102,6 +103,11 @@ func InitTheme(themeName string) {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorAccent).
 		Padding(1, 2)
+	panelStyle = lipgloss.NewStyle().
+		Background(colorBgPanel).
+		Foreground(colorText).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colorBorder)
 }
 
 func statusBadge(status string) string {

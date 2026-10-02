@@ -24,7 +24,8 @@ func (m Model) View() string {
 		parts = append(parts, m.viewTabs())
 	}
 	parts = append(parts, body, m.viewFooter(), m.viewStatus())
-	return clipHeight(lipgloss.JoinVertical(lipgloss.Left, parts...), m.height)
+	view := clipHeight(lipgloss.JoinVertical(lipgloss.Left, parts...), m.height)
+	return m.applyYankOverlays(view)
 }
 
 func clipHeight(s string, height int) string {

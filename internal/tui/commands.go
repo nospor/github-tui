@@ -4,7 +4,6 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github-tui/internal/config"
@@ -349,19 +348,11 @@ func (m Model) yankSelected() (tea.Model, tea.Cmd) {
 	return m.yank(raw)
 }
 
-func (m Model) yankDetail() (tea.Model, tea.Cmd) {
-	links := m.collectLinks()
-	if len(links) == 0 {
-		return m, nil
-	}
-	return m.yank(links[0].URL)
-}
-
 func (m Model) yank(raw string) (tea.Model, tea.Cmd) {
 	if raw == "" {
 		return m, nil
 	}
-	if err := clipboard.WriteAll(raw); err != nil {
+	if err := clipboardWriteAll(raw); err != nil {
 		m.setStatus(err.Error())
 		return m, m.scheduleClear()
 	}

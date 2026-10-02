@@ -14,7 +14,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 - 📁 **Repositories** — browse repos the token can access, search the list as you type, and switch the working repo
 - 🔌 **Servers** — github.com and GitHub Enterprise, selected from config
 - 🧠 **Auto-detect** — picks the server and `owner/repo` from the current directory's git remote
-- 🔗 **Open and yank** — `o` opens the GitHub page in a browser, `y` copies the URL
+- 🔗 **Open and yank** — `o` opens the GitHub page in a browser; `y` copies the URL from a list, or on details opens a yank menu (ID, title, description, URLs)
 - 🎫 **YouTrack** — optional issue-key links (`PROJ-123`) in descriptions and comments
 - 🎨 **Themes** — `catppuccin` (default) and `teams`
 
