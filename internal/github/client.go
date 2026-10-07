@@ -48,6 +48,8 @@ type PullInfo struct {
 	HTMLURL   string
 	Head      string
 	Base      string
+	PlusOne   int
+	MinusOne  int
 	UpdatedAt time.Time
 }
 
@@ -280,11 +282,13 @@ func (c *Client) GetPull(full string, number int) (*PullInfo, []*CommentInfo, bo
 	if err != nil {
 		return nil, nil, false, apiErr(fmt.Sprintf("get pull request #%d", number), err)
 	}
+	info := mapPull(pr)
+	c.fillPullReactions(owner, name, number, info)
 	comments, truncated, cerr := c.listComments(owner, name, number)
 	if cerr != nil {
-		return mapPull(pr), nil, false, cerr
+		return info, nil, false, cerr
 	}
-	return mapPull(pr), comments, truncated, nil
+	return info, comments, truncated, nil
 }
 
 // CreatePull opens a pull request. head is a branch name, or "user:branch" for a fork.
@@ -400,10 +404,11 @@ func (c *Client) CreateIssue(full, title, body string) (*IssueInfo, error) {
 	return mapIssue(issue), nil
 }
 
-// ToggleIssueVote adds or removes a +1/-1 reaction on an issue.
-// content must be "+1" or "-1". If the authenticated user already has that
-// reaction, it is deleted and the function returns false. Otherwise it is
-// created and the function returns true.
+// ToggleIssueVote adds or removes a +1/-1 reaction on an issue or pull request.
+// GitHub treats pull requests as issues for this API, so the same number works
+// for both. content must be "+1" or "-1". If the authenticated user already
+// has that reaction, it is deleted and the function returns false. Otherwise
+// it is created and the function returns true.
 func (c *Client) ToggleIssueVote(full string, number int, content, username string) (added bool, err error) {
 	if content != "+1" && content != "-1" {
 		return false, fmt.Errorf("unsupported vote %q", content)
@@ -739,14 +744,29 @@ func mapPull(pr *gh.PullRequest) *PullInfo {
 	}
 }
 
+func (c *Client) fillPullReactions(owner, name string, number int, info *PullInfo) {
+	if info == nil {
+		return
+	}
+	issue, _, err := c.raw.Issues.Get(context.Background(), owner, name, number)
+	if err != nil || issue == nil {
+		return
+	}
+	info.PlusOne, info.MinusOne = reactionCounts(issue.GetReactions())
+}
+
+func reactionCounts(r *gh.Reactions) (int, int) {
+	if r == nil {
+		return 0, 0
+	}
+	return r.GetPlusOne(), r.GetMinusOne()
+}
+
 func mapIssue(issue *gh.Issue) *IssueInfo {
 	if issue == nil {
 		return &IssueInfo{}
 	}
-	plus, minus := 0, 0
-	if r := issue.GetReactions(); r != nil {
-		plus, minus = r.GetPlusOne(), r.GetMinusOne()
-	}
+	plus, minus := reactionCounts(issue.GetReactions())
 	return &IssueInfo{
 		Number:    issue.GetNumber(),
 		Title:     issue.GetTitle(),

@@ -66,6 +66,17 @@ func TestMapTimeline(t *testing.T) {
 	}
 }
 
+func TestReactionCounts(t *testing.T) {
+	plus, minus := reactionCounts(nil)
+	if plus != 0 || minus != 0 {
+		t.Fatalf("nil: got %d %d", plus, minus)
+	}
+	plus, minus = reactionCounts(&gh.Reactions{PlusOne: gh.Ptr(3), MinusOne: gh.Ptr(1)})
+	if plus != 3 || minus != 1 {
+		t.Fatalf("got %d %d", plus, minus)
+	}
+}
+
 func TestUserReactionID(t *testing.T) {
 	reactions := []*gh.Reaction{
 		nil,

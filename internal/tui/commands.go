@@ -231,6 +231,8 @@ func (m Model) cmdSetIssue(number int, state string) tea.Cmd {
 	}, "Issue #"+itoa(number)+" "+state)
 }
 
+// cmdVoteIssue toggles a +1/-1 reaction. GitHub uses the issue reactions API
+// for pull requests as well, so the same command covers both.
 func (m Model) cmdVoteIssue(number int, content string) tea.Cmd {
 	client := m.client
 	full := m.repoFull()

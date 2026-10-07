@@ -28,6 +28,33 @@ func asModel(t *testing.T, got any) Model {
 	return m
 }
 
+func TestHandleDetailVoteOnPR(t *testing.T) {
+	m := testModel()
+	m.tab = tabPRs
+	m.state = stateDetail
+	m.username = "alice"
+	m.detailPR = &gh.PullInfo{Number: 2, Title: "Add diffs", State: "open"}
+
+	got, cmd := m.handleDetail("+")
+	m = asModel(t, got)
+	if cmd == nil {
+		t.Fatal("expected vote up command on PR detail")
+	}
+	if !m.loading {
+		t.Fatal("expected loading while toggling a PR vote")
+	}
+
+	m = testModel()
+	m.tab = tabPRs
+	m.state = stateDetail
+	m.username = "alice"
+	m.detailPR = &gh.PullInfo{Number: 2, Title: "Add diffs", State: "open"}
+	_, cmd = m.handleDetail("-")
+	if cmd == nil {
+		t.Fatal("expected vote down command on PR detail")
+	}
+}
+
 func TestEscFromIssueClearsItemDetail(t *testing.T) {
 	m := testModel()
 	m.tab = tabIssues

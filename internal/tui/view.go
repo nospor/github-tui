@@ -151,7 +151,7 @@ func (m Model) hints() string {
 		if m.detailPR != nil {
 			h = append([][2]string{{"tab", "diff"}}, h...)
 		}
-		if m.detailIssue != nil {
+		if m.detailPR != nil || m.detailIssue != nil {
 			h = append([][2]string{{"+", "vote up"}, {"-", "vote down"}}, h...)
 		}
 		return joinHints(h)
@@ -754,6 +754,8 @@ func (m Model) prDetailLines(width int) []string {
 	add(dimStyle.Render(fmt.Sprintf("%s → %s   %s   %s", pr.Head, pr.Base, pr.Author, shortTime(pr.UpdatedAt))))
 	add("")
 	lines = append(lines, wrapStyled(pr.Body, width)...)
+	add("")
+	add(dimStyle.Render(fmt.Sprintf("👍 %d  👎 %d", pr.PlusOne, pr.MinusOne)))
 	return m.appendComments(lines, width)
 }
 

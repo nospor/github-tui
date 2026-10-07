@@ -6,7 +6,7 @@ Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea), in the same
 
 ## Features
 
-- 🔀 **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, open, merge, close, reopen, create, and inspect the file diff (`Tab`)
+- 🔀 **Pull requests** — list, filter (`open` / `closed` / `all`), read the description and comments, comment, vote up/down (`+` / `-`), open, merge, close, reopen, create, and inspect the file diff (`Tab`)
 - 🌿 **Branches** — list, delete, open a branch to browse commits with diff pane (`Tab`), compare two branches (`C`), create a pull request from a branch (`c`)
 - 🏷️ **Tags** — list, create (name, ref branch, message), edit GitHub release notes (`e` in tag detail), delete, browse commits with diff pane
 - 🐛 **Issues** — list, filter, read, comment, create, close, reopen, vote up/down (`+` / `-`), and create a git branch for an issue (`b`)
@@ -89,7 +89,7 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 | `Tab` | Next tab on lists. In a pull request, branch, or tag detail: toggle the diff pane |
 | `d` | On Branches or Tags (list), delete the selected branch or tag |
 | `b` | On Issues (list or detail), create a git branch for the issue |
-| `+` / `-` | On issue detail, vote up / down (toggle) |
+| `+` / `-` | On pull request or issue detail, vote up / down (toggle) |
 | `m` | Merge the pull request |
 | `x` / `O` | Close / reopen |
 | `R` | Re-run a workflow |

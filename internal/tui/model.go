@@ -1062,12 +1062,12 @@ func (m Model) handleDetail(key string) (tea.Model, tea.Cmd) {
 			return m.startComment()
 		}
 	case "+":
-		if m.detailIssue != nil {
-			return m.track(m.cmdVoteIssue(m.detailIssue.Number, "+1"))
+		if n, ok := m.detailVoteNumber(); ok {
+			return m.track(m.cmdVoteIssue(n, "+1"))
 		}
 	case "-":
-		if m.detailIssue != nil {
-			return m.track(m.cmdVoteIssue(m.detailIssue.Number, "-1"))
+		if n, ok := m.detailVoteNumber(); ok {
+			return m.track(m.cmdVoteIssue(n, "-1"))
 		}
 	case "x":
 		return m.closeDetail()
@@ -1429,6 +1429,17 @@ func (m Model) reloadDetail() tea.Cmd {
 		return m.cmdRun(m.detailRun.ID)
 	default:
 		return nil
+	}
+}
+
+func (m Model) detailVoteNumber() (int, bool) {
+	switch {
+	case m.detailPR != nil:
+		return m.detailPR.Number, true
+	case m.detailIssue != nil:
+		return m.detailIssue.Number, true
+	default:
+		return 0, false
 	}
 }
 

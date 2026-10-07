@@ -645,6 +645,42 @@ func TestIssueDetailLayout(t *testing.T) {
 	}
 }
 
+func TestPRDetailShowsVotes(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "org/app"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 120
+	m.height = 32
+	m.tab = tabPRs
+	m.state = stateDetail
+	m.username = "robertn"
+	m.detailPR = &gh.PullInfo{
+		Number:   2,
+		Title:    "Add diffs",
+		State:    "open",
+		Head:     "feat",
+		Base:     "main",
+		Author:   "robertn",
+		Body:     "please review",
+		PlusOne:  4,
+		MinusOne: 1,
+	}
+	m.rebuildDetail()
+
+	got := plain(m.View())
+	for _, want := range []string{
+		"#2", "Add diffs", "feat → main", "please review",
+		"👍 4", "👎 1", "vote up", "vote down",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("PR detail missing %q in:\n%s", want, got)
+		}
+	}
+}
+
 func TestVoteStatus(t *testing.T) {
 	if got := voteStatus("+1", true); got != "👍 Vote up added" {
 		t.Fatalf("got %q", got)
