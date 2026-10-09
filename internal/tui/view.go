@@ -192,7 +192,12 @@ func joinHints(pairs [][2]string) string {
 func (m Model) viewBody() string {
 	switch m.state {
 	case stateConfirm:
-		return m.placeDialog(subtitleStyle.Render("Confirm"), "", m.confirmMsg)
+		body := m.confirmMsg
+		if body != "" {
+			body += "\n\n"
+		}
+		body += dimStyle.Render("y confirm · n cancel")
+		return m.placeDialog(subtitleStyle.Render("Confirm"), "", body)
 	case stateServerSelect:
 		return m.viewServers()
 	case stateLinkSelect:

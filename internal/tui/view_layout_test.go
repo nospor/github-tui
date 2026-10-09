@@ -695,3 +695,30 @@ func TestVoteStatus(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestConfirmDialogShowsYNHint(t *testing.T) {
+	cfg := &config.Config{Servers: []config.Server{{
+		Name: "github.com",
+		URL:  "https://github.com",
+	}}}
+	repo := &gh.RepoInfo{FullName: "org/app"}
+	m := New(cfg, 0, nil, repo, "", "", 0)
+	m.width = 80
+	m.height = 24
+	m.tab = tabPRs
+	m.state = stateConfirm
+	m.confirmMsg = "Merge pull request #1?"
+	m.username = "robertn"
+
+	got := plain(m.viewBody())
+	for _, want := range []string{
+		"Confirm",
+		"Merge pull request #1?",
+		"y confirm",
+		"n cancel",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("confirm dialog missing %q in:\n%s", want, got)
+		}
+	}
+}
