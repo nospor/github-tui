@@ -85,6 +85,7 @@ func (m *Model) applyLog(msg logMsg) {
 	m.logName = msg.name
 	m.logLines = lines
 	m.logJobID = msg.jobID
+	m.logTruncated = msg.truncated
 	if !same {
 		m.logScroll = 0
 		m.state = stateJobLog

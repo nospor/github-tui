@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -104,10 +105,16 @@ type (
 		quiet  bool
 	}
 	logMsg struct {
-		name  string
-		text  string
-		jobID int64
-		quiet bool
+		name      string
+		text      string
+		jobID     int64
+		quiet     bool
+		truncated bool
+	}
+	jobLogPagerMsg struct {
+		path string
+		name string
+		line int
 	}
 	tickMsg struct{}
 	doneMsg struct {
@@ -280,6 +287,7 @@ type Model struct {
 	logLines           []string
 	logScroll          int
 	logJobID           int64
+	logTruncated       bool
 
 	formKind   string
 	formFocus  int
@@ -630,6 +638,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.applyLog(msg)
 		return m, nil
+	case jobLogPagerMsg:
+		m = m.finish()
+		m.status = ""
+		cmd := jobLogPagerCmd(msg.path, msg.line)
+		return m.track(tea.ExecProcess(cmd, func(err error) tea.Msg {
+			_ = os.Remove(msg.path)
+			if err != nil {
+				return errMsg{fmt.Errorf("pager: %w", err)}
+			}
+			return doneMsg{text: "Closed full log for " + msg.name}
+		}))
 	case tickMsg:
 		if cmd := m.pollRunCmds(); cmd != nil {
 			return m, cmd
@@ -1118,6 +1137,8 @@ func (m Model) handleLog(key string) (tea.Model, tea.Cmd) {
 			return m.track(m.cmdJobLog(job))
 		}
 		return m.openJobLog()
+	case "L":
+		return m.openJobLogPager()
 	case "o":
 		if m.jobCursor >= 0 && m.jobCursor < len(m.jobs) && m.jobs[m.jobCursor].HTMLURL != "" {
 			return m.openURL(m.jobs[m.jobCursor].HTMLURL)
@@ -1896,6 +1917,18 @@ func (m Model) openJobLog() (tea.Model, tea.Cmd) {
 	}
 	job := m.jobs[m.jobCursor]
 	return m.track(m.cmdJobLog(job))
+}
+
+func (m Model) openJobLogPager() (tea.Model, tea.Cmd) {
+	if !m.logTruncated {
+		return m, nil
+	}
+	job := m.jobByID(m.logJobID)
+	if job == nil {
+		return m, nil
+	}
+	m.setStatus("Downloading full log…")
+	return m.track(m.cmdPageJobLog(job))
 }
 
 func (m *Model) moveJob(delta int) {

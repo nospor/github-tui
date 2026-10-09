@@ -117,7 +117,12 @@ func (m Model) hints() string {
 	case stateDispatch:
 		return joinHints([][2]string{{"tab", "next field"}, {"j/k", "choice"}, {"ctrl+s", "run"}, {"esc", "cancel"}})
 	case stateJobLog:
-		return joinHints([][2]string{{"j/k", "scroll"}, {"g/G", "top/bottom"}, {"r", "refresh"}, {"esc", "back"}})
+		h := [][2]string{{"j/k", "scroll"}, {"g/G", "top/bottom"}, {"r", "refresh"}}
+		if m.logTruncated {
+			h = append(h, [2]string{"L", "load rest"})
+		}
+		h = append(h, [2]string{"esc", "back"})
+		return joinHints(h)
 	case stateDetail:
 		if m.inRefDetail() {
 			if m.branchCommitDiffPanelOpen || m.tagCommitDiffPanelOpen {
@@ -903,7 +908,11 @@ func (m Model) viewRun() string {
 func (m Model) viewLog() string {
 	m.clampLog()
 	var b strings.Builder
-	b.WriteString(subtitleStyle.Render("Log  " + m.logName))
+	title := "Log  " + m.logName
+	if m.logTruncated {
+		title += "  (truncated)"
+	}
+	b.WriteString(subtitleStyle.Render(title))
 	b.WriteString("\n")
 	height := m.logHeight()
 	width := max(20, m.width-1)

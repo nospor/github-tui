@@ -26,6 +26,7 @@ func (m *Model) clearItemDetail() {
 	m.logLines = nil
 	m.logScroll = 0
 	m.logJobID = 0
+	m.logTruncated = false
 	m.clearPRDiff()
 	m.closeYank()
 }

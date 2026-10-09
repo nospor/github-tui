@@ -540,41 +540,79 @@ func (c *Client) GetRun(full string, id int64) (*RunInfo, []*JobInfo, error) {
 	return mapRun(run), out, nil
 }
 
-// JobLog downloads the plain-text log of one job.
-func (c *Client) JobLog(full string, jobID int64) (string, error) {
+const (
+	maxJobLogPreview = 1 << 20
+	// JobLogTruncatedMarker is appended when JobLog returns a truncated preview.
+	JobLogTruncatedMarker = "… log truncated …"
+	jobLogDownloadTimeout = 10 * time.Minute
+)
+
+// JobLog downloads a preview of one job's plain-text log.
+// truncated is true when the job produced more than maxJobLogPreview bytes.
+func (c *Client) JobLog(full string, jobID int64) (string, bool, error) {
+	resp, err := c.downloadJobLog(full, jobID, 0)
+	if err != nil {
+		return "", false, err
+	}
+	defer resp.Body.Close()
+	return previewJobLog(resp.Body)
+}
+
+// WriteJobLog copies the full job log to w, with no size cap.
+func (c *Client) WriteJobLog(full string, jobID int64, w io.Writer) error {
+	resp, err := c.downloadJobLog(full, jobID, jobLogDownloadTimeout)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		return fmt.Errorf("write job log: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) downloadJobLog(full string, jobID int64, timeout time.Duration) (*http.Response, error) {
 	owner, name, err := SplitRepo(full)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	logURL, _, err := c.raw.Actions.GetWorkflowJobLogs(context.Background(), owner, name, jobID, 3)
 	if err != nil {
-		return "", apiErr("get job log", err)
+		return nil, apiErr("get job log", err)
 	}
 	if logURL == nil {
-		return "", fmt.Errorf("job %d has no log URL", jobID)
+		return nil, fmt.Errorf("job %d has no log URL", jobID)
 	}
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, logURL.String(), nil)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	resp, err := c.http.Do(req)
+	client := c.http
+	if timeout > 0 && c.http != nil && c.http.Timeout != timeout {
+		cloned := *c.http
+		cloned.Timeout = timeout
+		client = &cloned
+	}
+	resp, err := client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("download job log: %w", err)
+		return nil, fmt.Errorf("download job log: %w", err)
 	}
-	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		return "", fmt.Errorf("download job log: %s", resp.Status)
+		resp.Body.Close()
+		return nil, fmt.Errorf("download job log: %s", resp.Status)
 	}
-	const maxLog = 1 << 20
-	body, err := io.ReadAll(io.LimitReader(resp.Body, maxLog+1))
+	return resp, nil
+}
+
+func previewJobLog(r io.Reader) (string, bool, error) {
+	body, err := io.ReadAll(io.LimitReader(r, maxJobLogPreview+1))
 	if err != nil {
-		return "", fmt.Errorf("read job log: %w", err)
+		return "", false, fmt.Errorf("read job log: %w", err)
 	}
-	text := string(body)
-	if len(body) > maxLog {
-		text = text[:maxLog] + "\n\n… log truncated …"
+	if len(body) > maxJobLogPreview {
+		return string(body[:maxJobLogPreview]) + "\n\n" + JobLogTruncatedMarker, true, nil
 	}
-	return text, nil
+	return string(body), false, nil
 }
 
 // Rerun starts a workflow run again.

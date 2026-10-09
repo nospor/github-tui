@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -161,7 +163,7 @@ func (m Model) cmdLoadJobLog(job *gh.JobInfo, quiet bool) tea.Cmd {
 	name := job.Name
 	id := job.ID
 	return func() tea.Msg {
-		text, err := client.JobLog(full, id)
+		text, truncated, err := client.JobLog(full, id)
 		if err != nil {
 			if quiet {
 				return nil
@@ -171,7 +173,67 @@ func (m Model) cmdLoadJobLog(job *gh.JobInfo, quiet bool) tea.Cmd {
 		if strings.TrimSpace(text) == "" {
 			text = "(no log output)"
 		}
-		return logMsg{name: name, text: text, jobID: id, quiet: quiet}
+		return logMsg{name: name, text: text, jobID: id, quiet: quiet, truncated: truncated}
+	}
+}
+
+func (m Model) cmdPageJobLog(job *gh.JobInfo) tea.Cmd {
+	if job == nil {
+		return nil
+	}
+	client := m.client
+	full := m.repoFull()
+	name := job.Name
+	id := job.ID
+	line := jobLogPagerStartLine(m.logLines)
+	return func() tea.Msg {
+		f, err := os.CreateTemp("", "github-tui-job-log-*.txt")
+		if err != nil {
+			return errMsg{err}
+		}
+		path := f.Name()
+		writeErr := client.WriteJobLog(full, id, f)
+		closeErr := f.Close()
+		if writeErr != nil {
+			_ = os.Remove(path)
+			return errMsg{writeErr}
+		}
+		if closeErr != nil {
+			_ = os.Remove(path)
+			return errMsg{closeErr}
+		}
+		return jobLogPagerMsg{path: path, name: name, line: line}
+	}
+}
+
+func jobLogPagerStartLine(lines []string) int {
+	n := len(lines)
+	for n > 0 {
+		s := strings.TrimSpace(lines[n-1])
+		if s == "" || s == gh.JobLogTruncatedMarker {
+			n--
+			continue
+		}
+		break
+	}
+	if n < 1 {
+		return 1
+	}
+	return n
+}
+
+func jobLogPagerCmd(path string, line int) *exec.Cmd {
+	if line < 1 {
+		line = 1
+	}
+	pager := strings.TrimSpace(os.Getenv("PAGER"))
+	switch {
+	case pager == "", pager == "less":
+		return exec.Command("less", "-R", fmt.Sprintf("+%d", line), "--", path)
+	case strings.ContainsAny(pager, " \t"):
+		return exec.Command("sh", "-c", pager+` "$1"`, "sh", path)
+	default:
+		return exec.Command(pager, path)
 	}
 }
 

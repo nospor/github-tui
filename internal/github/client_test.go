@@ -1,7 +1,9 @@
 package github
 
 import (
+	"bytes"
 	"net/http"
+	"strings"
 	"testing"
 
 	gh "github.com/google/go-github/v68/github"
@@ -117,5 +119,38 @@ func TestIsNotFound(t *testing.T) {
 	}
 	if isNotFound(&gh.ErrorResponse{Response: &http.Response{StatusCode: http.StatusInternalServerError}}) {
 		t.Fatal("500 should not be not-found")
+	}
+}
+
+func TestPreviewJobLogKeepsSmallLogs(t *testing.T) {
+	text, truncated, err := previewJobLog(strings.NewReader("ok\nline two"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if truncated {
+		t.Fatal("expected full log")
+	}
+	if text != "ok\nline two" {
+		t.Fatalf("text=%q", text)
+	}
+}
+
+func TestPreviewJobLogTruncatesOverCap(t *testing.T) {
+	body := bytes.Repeat([]byte("a"), maxJobLogPreview+32)
+	text, truncated, err := previewJobLog(bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated {
+		t.Fatal("expected truncation")
+	}
+	if !strings.HasSuffix(text, JobLogTruncatedMarker) {
+		t.Fatalf("missing marker: %q", text[len(text)-40:])
+	}
+	if len(text) <= maxJobLogPreview {
+		t.Fatalf("truncated text too short: %d", len(text))
+	}
+	if got := text[:maxJobLogPreview]; got != string(body[:maxJobLogPreview]) {
+		t.Fatal("preview prefix should be the first maxJobLogPreview bytes")
 	}
 }
