@@ -103,6 +103,10 @@ From inside a clone, the `origin` remote selects the repository when its host ma
 
 Create forms use `Tab` to move between fields and `Ctrl+S` to save. In a pull request, **Head** is the branch name, or `user:branch` when the branch is on a fork. **Base** starts as the repository's default branch. On Actions, `w` opens **Run workflow** for a `workflow_dispatch` workflow: pick the branch and inputs, then `Ctrl+S` to start it.
 
+## See also
+
+- [gitlab-tui](https://github.com/nospor/gitlab-tui) — sibling TUI for GitLab: merge requests, pipelines, issues, branches, tags, and the container registry. Same Bubble Tea layout, keys, config shape, and YouTrack links.
+
 ## License
 
 See [LICENSE](LICENSE).
